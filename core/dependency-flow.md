@@ -13,11 +13,12 @@ transport
 
 
 # core/crypto
-hashing
-serialization
-signing
-verification
-wallet generation
+serialization (deterministic bytes)
+hashing (deterministic identity)
+wallet generation  (identitiy generation)
+signing  (authorization)
+verification (signature validation)
+
 
 # core/verification
 request validation
