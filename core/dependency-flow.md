@@ -50,3 +50,16 @@ persistent state
 event logs
 replay persistence
 settlement persistence
+
+//signing flow architecture
+request object
+    ↓
+canonical serialization
+    ↓
+UTF-8 bytes
+    ↓
+keccak256 hash
+    ↓
+sign digest
+    ↓
+signature output
