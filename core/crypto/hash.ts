@@ -9,29 +9,13 @@ import {
   serializeCanonical,
 } from "./serialization";
 
-/**
- * ---------------------------------------------------------------------
- * Supported Hash Algorithms
- * ---------------------------------------------------------------------
- */
+import type {
+  HashAlgorithm,
+} from "./types";
 
-export type HashAlgorithm =
-  | "keccak256"
-  | "sha256";
-
-/**
- * ---------------------------------------------------------------------
- * Hashing Error
- * ---------------------------------------------------------------------
- */
-
-export class HashingError extends Error {
-  constructor(message: string) {
-    super(message);
-
-    this.name = "HashingError";
-  }
-}
+import {
+  HashingError,
+} from "./errors";
 
 /**
  * ---------------------------------------------------------------------

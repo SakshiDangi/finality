@@ -4,31 +4,13 @@ import {
   computeAddress,
 } from "ethers";
 
-/**
- * ---------------------------------------------------------------------
- * Wallet Error
- * ---------------------------------------------------------------------
- */
+import type {
+  ProtocolWallet,
+} from "./types";
 
-export class WalletError extends Error {
-  constructor(message: string) {
-    super(message);
-
-    this.name = "WalletError";
-  }
-}
-
-/**
- * ---------------------------------------------------------------------
- * Protocol Wallet Interface
- * ---------------------------------------------------------------------
- */
-
-export interface ProtocolWallet {
-  address: string;
-  publicKey: string;
-  privateKey: string;
-}
+import {
+  WalletError,
+} from "./errors";
 
 /**
  * ---------------------------------------------------------------------
