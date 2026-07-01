@@ -1,15 +1,17 @@
 {
   "name": "finality",
+  "private": true,
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
     "test": "turbo test",
     "lint": "turbo lint",
-    "format": "prettier --write ."
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write .",
+    "clean": "turbo clean && rm -rf node_modules"
   },
   "keywords": [],
   "author": "",
@@ -27,5 +29,9 @@
     "tsx": "^4.22.4",
     "turbo": "^2.10.0",
     "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "ethers": "^6.17.0",
+    "zod": "^4.4.3"
   }
 }
