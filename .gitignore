@@ -1,5 +1,8 @@
 node_modules
 dist
-.env
-coverage
 .turbo
+coverage
+.env
+.env.local
+.DS_Store
+*.log
