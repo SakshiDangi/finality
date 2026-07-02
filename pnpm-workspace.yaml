@@ -1,6 +1,6 @@
 packages:
-  - "apps/*"
-  - "core/*"
-  - "adapters/*"
-allowBuilds:
-  esbuild: false
+  - apps/*
+  - packages/*
+
+ignoredBuiltDependencies:
+  - esbuild
