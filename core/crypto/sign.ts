@@ -15,33 +15,13 @@ import {
   isValidPrivateKey,
 } from "./wallet";
 
-/**
- * ---------------------------------------------------------------------
- * Signature Error
- * ---------------------------------------------------------------------
- */
+import type {
+  SignedPayload,
+} from "./types";
 
-export class SigningError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "SigningError";
-  }
-}
-
-/**
- * ---------------------------------------------------------------------
- * Signed Payload Structure
- * ---------------------------------------------------------------------
- */
-
-export interface SignedPayload {
-  signer: string;
-  algorithm: "keccak256";
-  digest: string;
-  signature: string;
-  serialized: string;
-  signedAt: number;
-}
+import {
+  SigningError,
+} from "./errors";
 
 /**
  * ---------------------------------------------------------------------

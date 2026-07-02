@@ -3,37 +3,13 @@ import {
   hexlify,
 } from "ethers";
 
-/**
- * ---------------------------------------------------------------------
- * Serializable Primitive Types
- * ---------------------------------------------------------------------
- */
+import type {
+  Serializable,
+} from "./types";
 
-export type Serializable =
-  | null
-  | boolean
-  | number
-  | string
-  | bigint
-  | Serializable[]
-  | {
-      [key: string]: Serializable;
-    };
-
-/**
- * ---------------------------------------------------------------------
- * Canonical Serialization Error
- * ---------------------------------------------------------------------
- */
-
-export class SerializationError extends Error {
-  constructor(message: string) {
-    super(message);
-
-    this.name =
-      "SerializationError";
-  }
-}
+import {
+  SerializationError,
+} from "./errors";
 
 /**
  * ---------------------------------------------------------------------
