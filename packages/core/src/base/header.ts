@@ -11,7 +11,7 @@ import {
  * =======================================*/
 
 export const HeaderSchema =
-  z.object({
+  z.strictObject({
     /*
      * Unique message identifier
      */

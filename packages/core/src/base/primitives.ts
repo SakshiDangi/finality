@@ -8,64 +8,100 @@ import { z } from "zod";
  * packet-abc
  * bridge-node-7
  */
-export const IdentifierSchema = z
-  .string()
-  .min(1)
-  .max(128);
+export const IdentifierSchema =
+  z.string()
+    .min(1)
+    .max(128);
 
 /**
  * Unix timestamp in milliseconds.
  */
-export const TimestampSchema = z
-  .number()
-  .int()
-  .nonnegative();
+export const TimestampSchema =
+  z.number()
+    .int()
+    .nonnegative();
 
 /**
- * Monotonic nonce value.
+ * Monotonic replay-protection nonce.
  */
-export const NonceSchema = z
-  .number()
-  .int()
-  .nonnegative();
+export const NonceSchema =
+  z.number()
+    .int()
+    .nonnegative();
 
 /**
- * Hexadecimal string with 0x prefix.
+ * Canonical hex string.
+ *
+ * All cryptographic primitives
+ * inside the protocol should
+ * use strict hex typing.
  */
-export const HexStringSchema = z
-  .string()
-  .regex(/^0x[a-fA-F0-9]+$/);
+export type HexString =
+  `0x${string}`;
 
 /**
- * Generic protocol address.
+ * Runtime hex validator.
+ */
+export const HexStringSchema =
+  z.custom<HexString>(
+    (value) => {
+      return (
+        typeof value ===
+          "string" &&
+        /^0x[a-fA-F0-9]+$/.test(
+          value,
+        )
+      );
+    },
+    {
+      message:
+        "Invalid hex string",
+    },
+  );
+
+/**
+ * Protocol address.
+ *
+ * Currently Ethereum-style.
+ */
+export type Address =
+  `0x${string}`;
+
+/**
+ * Runtime protocol address validator.
  */
 export const AddressSchema =
-  HexStringSchema;
+  z.custom<Address>(
+    (value) => {
+      return (
+        typeof value ===
+          "string" &&
+        /^0x[a-fA-F0-9]{40}$/.test(
+          value,
+        )
+      );
+    },
+    {
+      message:
+        "Invalid address",
+    },
+  );
+
 
 /**
- * Arbitrary metadata object.
+ * Runtime primitive types.
  */
-export const MetadataSchema = z.record(
-  z.string(),
-  z.unknown()
-);
+export type Identifier =
+  z.infer<
+    typeof IdentifierSchema
+  >;
 
-export type Identifier = z.infer<
-  typeof IdentifierSchema
->;
+export type Timestamp =
+  z.infer<
+    typeof TimestampSchema
+  >;
 
-export type Timestamp = z.infer<
-  typeof TimestampSchema
->;
-
-export type Nonce = z.infer<
-  typeof NonceSchema
->;
-
-export type HexString = z.infer<
-  typeof HexStringSchema
->;
-
-export type Address = z.infer<
-  typeof AddressSchema
->;
+export type Nonce =
+  z.infer<
+    typeof NonceSchema
+  >;
