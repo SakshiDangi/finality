@@ -8,181 +8,404 @@ import {
   EnvelopeSchema,
 } from "../../base/envelope.js";
 
-const validHeader = {
-  messageId:
-    "msg-1",
+import type {
+  Envelope,
+  EnvelopeMetadata,
+  EnvelopePayload,
+} from "../../base/envelope.js";
 
-  domain:
-    "FINALITY_CORE_V1",
+/* =========================================
+ * TEST HELPERS
+ * =======================================*/
 
-  protocol:
-    "FINALITY",
+function makeHeader():
+  Envelope["header"] {
+  return {
+    messageId:
+      "msg-1",
 
-  version:
-    "1.0.0",
+    domain:
+      "FINALITY_CORE_V1",
 
-  messageKind:
-    "REQUEST",
+    protocol:
+      "FINALITY",
 
-  sender:
-    "0x1111111111111111111111111111111111111111",
+    version:
+      "1.0.0",
 
-  timestamp:
-    Date.now(),
+    messageKind:
+      "REQUEST",
 
-  nonce: 1,
+    sender:
+      "0x1111111111111111111111111111111111111111",
 
-  sequence: 0,
+    publicKey:
+      "0x" + "11".repeat(33),
 
-  ttl: 30000,
+    timestamp:
+      Date.now(),
 
-  signatureAlgorithm:
-    "SECP256K1",
+    nonce: 1,
 
-  priority:
-    "NORMAL",
-};
+    sequence: 0,
 
-const validSignature =
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    ttl: 30000,
 
-describe("base/envelope", () => {
-  it(
-    "should validate envelope",
-    () => {
-      const result =
-        EnvelopeSchema.safeParse({
-          header:
-            validHeader,
+    signatureAlgorithm:
+      "SECP256K1",
 
-          payload: {
-            amount: 100,
-            asset: "USDC",
-          },
+    priority:
+      "NORMAL",
+  };
+}
 
-          signature:
-            validSignature,
+function makePayload():
+  EnvelopePayload {
+  return {
+    amount: 100,
+    asset: "USDC",
+  };
+}
 
-          metadata: {
-            traceId:
-              "trace-1",
+function makeMetadata():
+  EnvelopeMetadata {
+  return {
+    traceId:
+      "trace-1",
+  };
+}
 
-            relayId:
-              "relay-1",
-          },
-        });
+function makeEnvelope():
+  Envelope {
+  return {
+    header:
+      makeHeader(),
 
-      if (!result.success) {
-        console.log(
-          result.error.format(),
-        );
-      }
+    payload:
+      makePayload(),
 
-      expect(result.success)
-        .toBe(true);
-    },
-  );
+    signature:
+      ("0x" +
+        "aa".repeat(
+          64,
+        )) as `0x${string}`,
 
-  it(
-    "should validate envelope without metadata",
-    () => {
-      const result =
-        EnvelopeSchema.safeParse({
-          header:
-            validHeader,
+    metadata:
+      makeMetadata(),
+  };
+}
 
-          payload: {
-            hello: "world",
-          },
+/* =========================================
+ * VALID ENVELOPES
+ * =======================================*/
 
-          signature:
-            validSignature,
-        });
+describe(
+  "base/envelope (valid envelopes)",
+  () => {
+    it(
+      "should validate canonical envelope",
+      () => {
+        const result =
+          EnvelopeSchema.safeParse(
+            makeEnvelope(),
+          );
 
-      if (!result.success) {
-        console.log(
-          result.error.format(),
-        );
-      }
+        expect(
+          result.success,
+        ).toBe(true);
+      },
+    );
 
-      expect(result.success)
-        .toBe(true);
-    },
-  );
+    it(
+      "should validate envelope without metadata",
+      () => {
+        const {
+          metadata,
+          ...envelope
+        } = makeEnvelope();
 
-  it(
-    "should reject invalid signature",
-    () => {
-      const result =
-        EnvelopeSchema.safeParse({
-          header:
-            validHeader,
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
 
-          payload: {},
+        expect(
+          result.success,
+        ).toBe(true);
+      },
+    );
 
-          signature:
-            "invalid-signature",
-        });
+    it(
+      "should allow nested payload values",
+      () => {
+        const envelope: Envelope =
+          {
+            ...makeEnvelope(),
 
-      expect(result.success)
-        .toBe(false);
-    },
-  );
+            payload: {
+              nested: {
+                amount: 100,
+              },
 
-  it(
-    "should reject missing header",
-    () => {
-      const result =
-        EnvelopeSchema.safeParse({
-          payload: {},
+              assets: [
+                "USDC",
+                "ETH",
+              ],
+            },
+          };
 
-          signature:
-            validSignature,
-        });
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
 
-      expect(result.success)
-        .toBe(false);
-    },
-  );
+        expect(
+          result.success,
+        ).toBe(true);
+      },
+    );
+  },
+);
 
-  it(
-    "should reject invalid payload",
-    () => {
-      const result =
-        EnvelopeSchema.safeParse({
-          header:
-            validHeader,
+/* =========================================
+ * SIGNATURE VALIDATION
+ * =======================================*/
 
-          payload: null,
+describe(
+  "base/envelope (signature validation)",
+  () => {
+    it(
+      "should reject invalid signature format",
+      () => {
+        const envelope: Envelope =
+          {
+            ...makeEnvelope(),
 
-          signature:
-            validSignature,
-        });
+            signature:
+              "invalid" as any,
+          };
 
-      expect(result.success)
-        .toBe(false);
-    },
-  );
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
 
-  it(
-    "should reject invalid metadata",
-    () => {
-      const result =
-        EnvelopeSchema.safeParse({
-          header:
-            validHeader,
+        expect(
+          result.success,
+        ).toBe(false);
+      },
+    );
 
-          payload: {},
+    it(
+      "should reject missing signature",
+      () => {
+        const envelope =
+          makeEnvelope();
 
-          signature:
-            validSignature,
+        delete (
+          envelope as any
+        ).signature;
 
-          metadata:
-            "invalid",
-        });
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
 
-      expect(result.success)
-        .toBe(false);
-    },
-  );
-});
+        expect(
+          result.success,
+        ).toBe(false);
+      },
+    );
+  },
+);
+
+/* =========================================
+ * HEADER VALIDATION
+ * =======================================*/
+
+describe(
+  "base/envelope (header validation)",
+  () => {
+    it(
+      "should reject missing header",
+      () => {
+        const envelope =
+          makeEnvelope();
+
+        delete (
+          envelope as any
+        ).header;
+
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+      },
+    );
+
+    it(
+      "should reject malformed sender address",
+      () => {
+        const envelope: Envelope =
+          {
+            ...makeEnvelope(),
+
+            header: {
+              ...makeHeader(),
+
+              sender:
+                "invalid",
+            },
+          };
+
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+      },
+    );
+
+    it(
+      "should reject unknown envelope fields",
+      () => {
+        const envelope = {
+          ...makeEnvelope(),
+
+          hacked: true,
+        };
+
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+      },
+    );
+  },
+);
+
+/* =========================================
+ * PAYLOAD VALIDATION
+ * =======================================*/
+
+describe(
+  "base/envelope (payload validation)",
+  () => {
+    it(
+      "should reject null payload",
+      () => {
+        const envelope: Envelope =
+          {
+            ...makeEnvelope(),
+
+            payload:
+              null as any,
+          };
+
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+      },
+    );
+
+    it(
+      "should reject invalid payload type",
+      () => {
+        const envelope: Envelope =
+          {
+            ...makeEnvelope(),
+
+            payload:
+              "invalid" as any,
+          };
+
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+      },
+    );
+  },
+);
+
+/* =========================================
+ * METADATA VALIDATION
+ * =======================================*/
+
+describe(
+  "base/envelope (metadata validation)",
+  () => {
+    it(
+      "should allow arbitrary metadata",
+      () => {
+        const envelope: Envelope =
+          {
+            ...makeEnvelope(),
+
+            metadata: {
+              traceId:
+                "trace-1",
+
+              relay:
+                "relay-7",
+
+              diagnostics: {
+                latency: 22,
+              },
+            },
+          };
+
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(true);
+      },
+    );
+
+    it(
+      "should reject invalid metadata type",
+      () => {
+        const envelope: Envelope =
+          {
+            ...makeEnvelope(),
+
+            metadata:
+              "invalid" as any,
+          };
+
+        const result =
+          EnvelopeSchema.safeParse(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+      },
+    );
+  },
+);

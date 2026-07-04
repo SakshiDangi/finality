@@ -31,9 +31,13 @@ import {
 } from "../../crypto/identity.js";
 
 import {
-  signPayload,
-  verifyPayloadSignature,
+  signEnvelope,
+  verifyDigestSignature,
 } from "../../crypto/signatures.js";
+
+import {
+  createSigningDigest,
+} from "../../verification/signature.js";
 
 describe(
   "crypto/integration",
@@ -70,6 +74,9 @@ describe(
 
           sender:
             identity.address,
+
+          publicKey:
+            identity.publicKey,
 
           timestamp:
             Date.now(),
@@ -117,53 +124,17 @@ describe(
           },
         };
 
-        /**
-         * Canonicalize envelope.
-         *
-         * IMPORTANT:
-         * metadata and signature
-         * MUST NOT participate
-         * in signing boundary.
-         */
-        const canonicalPayload =
-          canonicalizeEnvelope({
-            ...unsignedEnvelope,
 
-            signature:
-              "0x00",
-          } as Envelope);
 
-        expect(
-          typeof canonicalPayload,
-        ).toBe("string");
-
-        /**
-         * Deterministic protocol hash.
-         */
-        const digest =
-          hashString(
-            canonicalPayload,
-          );
-
-        expect(digest)
-          .toMatch(
-            /^0x[a-f0-9]+$/,
-          );
-
-        /**
-         * Sign canonical payload.
-         */
         const signature =
-          signPayload(
-            JSON.parse(
-              canonicalPayload,
-            ),
+          signEnvelope(
+            unsignedEnvelope,
             identity.privateKey,
           );
-
-        expect(signature)
-          .toMatch(
-            /^0x[a-f0-9]+$/,
+        
+        const digest =
+          createSigningDigest(
+            unsignedEnvelope,
           );
 
         /**
@@ -210,14 +181,8 @@ describe(
          * Metadata excluded.
          */
         const verified =
-          verifyPayloadSignature(
-            {
-              header:
-                envelope.header,
-
-              payload:
-                envelope.payload,
-            },
+          verifyDigestSignature(
+            digest,
             envelope.signature,
             identity.publicKey,
           );
@@ -234,48 +199,91 @@ describe(
           createIdentity(
             "validator-2",
           );
-
-        /**
-         * Original payload.
-         */
-        const payload = {
-          amount:
-            100,
-
-          asset:
-            "USDC",
+    
+        const envelope: Envelope = {
+          header: {
+            messageId:
+              "msg-2",
+    
+            domain:
+              "FINALITY_CORE_V1",
+    
+            messageKind:
+              "REQUEST",
+    
+            sender:
+              identity.address,
+    
+            publicKey:
+              identity.publicKey,
+    
+            timestamp:
+              Date.now(),
+    
+            nonce:
+              2,
+    
+            sequence:
+              2,
+    
+            ttl:
+              30_000,
+    
+            signatureAlgorithm:
+              "SECP256K1",
+    
+            priority:
+              "NORMAL",
+    
+            protocol:
+              "FINALITY",
+    
+            version:
+              "1.0.0",
+          },
+    
+          payload: {
+            amount:
+              100,
+    
+            asset:
+              "USDC",
+          },
+    
+          signature:
+            "0x00",
         };
-
+    
         /**
-         * Generate signature.
+         * Sign original envelope.
          */
         const signature =
-          signPayload(
-            payload,
+          signEnvelope(
+            envelope,
             identity.privateKey,
           );
-
+    
         /**
-         * Tamper after signing.
+         * Tamper AFTER signing.
          */
-        const tamperedPayload = {
-          amount:
-            999999,
-
-          asset:
-            "USDC",
-        };
-
+        envelope.payload.amount =
+          999999;
+    
+        const digest =
+          createSigningDigest(
+            envelope,
+          );
+    
         /**
-         * Verification MUST fail.
+         * MUST fail.
          */
         const verified =
-          verifyPayloadSignature(
-            tamperedPayload,
+          verifyDigestSignature(
+            digest,
             signature,
             identity.publicKey,
           );
-
+    
         expect(verified)
           .toBe(false);
       },
@@ -288,41 +296,92 @@ describe(
           createIdentity(
             "validator-a",
           );
-
+    
         const attacker =
           createIdentity(
             "validator-b",
           );
-
-        const payload = {
-          operation:
-            "settlement",
-
-          amount:
-            500,
+    
+        const envelope: Envelope = {
+          header: {
+            messageId:
+              "msg-attacker",
+    
+            domain:
+              "FINALITY_CORE_V1",
+    
+            messageKind:
+              "REQUEST",
+    
+            sender:
+              signer.address,
+    
+            publicKey:
+              signer.publicKey,
+    
+            timestamp:
+              Date.now(),
+    
+            nonce:
+              10,
+    
+            sequence:
+              10,
+    
+            ttl:
+              30_000,
+    
+            signatureAlgorithm:
+              "SECP256K1",
+    
+            priority:
+              "NORMAL",
+    
+            protocol:
+              "FINALITY",
+    
+            version:
+              "1.0.0",
+          },
+    
+          payload: {
+            operation:
+              "settlement",
+    
+            amount:
+              500,
+          },
+    
+          signature:
+            "0x00",
         };
-
+    
         /**
-         * Sign using signer identity.
+         * Sign using signer key.
          */
         const signature =
-          signPayload(
-            payload,
+          signEnvelope(
+            envelope,
             signer.privateKey,
           );
-
+    
+        const digest =
+          createSigningDigest(
+            envelope,
+          );
+    
         /**
          * Verify using attacker key.
          *
          * MUST fail.
          */
         const verified =
-          verifyPayloadSignature(
-            payload,
+          verifyDigestSignature(
+            digest,
             signature,
             attacker.publicKey,
           );
-
+    
         expect(verified)
           .toBe(false);
       },
@@ -394,6 +453,9 @@ describe(
 
               sender:
                 identity.address,
+
+              publicKey:
+                identity.publicKey,
 
               timestamp:
                 Date.now(),

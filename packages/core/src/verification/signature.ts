@@ -1,5 +1,6 @@
 import {
-  Envelope,
+  type Envelope,
+  type UnsignedEnvelope,
 } from "../base/envelope.js";
 
 import {
@@ -8,7 +9,7 @@ import {
 
 import {
   deriveAddress,
-  PublicKey,
+  type PublicKey,
 } from "../crypto/identity.js";
 
 import {
@@ -16,8 +17,11 @@ import {
 } from "../crypto/hashing.js";
 
 import {
+  verifyDigestSignature,
+} from "../crypto/signatures.js";
+
+import type {
   Signature,
-  verifyPayloadSignature,
 } from "../crypto/signatures.js";
 
 /* =========================================
@@ -31,8 +35,8 @@ export enum SignatureVerificationError {
   INVALID_SIGNATURE =
     "INVALID_SIGNATURE",
 
-  INVALID_SENDER =
-    "INVALID_SENDER",
+  ADDRESS_MISMATCH =
+    "ADDRESS_MISMATCH",
 
   MALFORMED_ENVELOPE =
     "MALFORMED_ENVELOPE",
@@ -78,7 +82,9 @@ export interface SignatureVerificationResult {
  * - excludes metadata
  */
 export function createSigningPayload(
-  envelope: Envelope,
+  envelope:
+  Envelope |
+  UnsignedEnvelope,
 ) {
   return {
     header:
@@ -94,7 +100,9 @@ export function createSigningPayload(
  * protocol signing digest.
  */
 export function createSigningDigest(
-  envelope: Envelope,
+  envelope:
+  Envelope |
+  UnsignedEnvelope,
 ): string {
   const canonical =
     canonicalizeEnvelope(
@@ -126,12 +134,12 @@ export function createSigningDigest(
  */
 export function verifyEnvelopeSignature(
   envelope: Envelope,
-  publicKey: PublicKey,
 ): SignatureVerificationResult {
   try {
     /**
      * Signature existence check.
      */
+
     if (
       !envelope.signature
     ) {
@@ -146,18 +154,57 @@ export function verifyEnvelopeSignature(
       };
     }
 
+    const publicKey =
+      envelope.header.publicKey;
+    
+    if (
+      !publicKey
+    ) {
+      return {
+        success: false,
+    
+        error:
+          SignatureVerificationError.MALFORMED_ENVELOPE,
+    
+        reason:
+          "Envelope public key missing",
+      };
+    }
+    
+    if (
+        !/^0x[a-fA-F0-9]+$/.test(
+          publicKey,
+        )
+      ) {
+      return {
+        success: false,
+    
+        error:
+          SignatureVerificationError.MALFORMED_ENVELOPE,
+    
+        reason:
+          "Invalid public key format",
+      };
+    }
+
+    
     /**
      * Verify cryptographic signature.
      */
+    
+
+    const digest =
+      createSigningDigest(
+        envelope,
+      );
+
     const isValidSignature =
-      verifyPayloadSignature(
-        createSigningPayload(
-          envelope,
-        ),
-
+      verifyDigestSignature(
+        digest,
+    
         envelope.signature as Signature,
-
-        publicKey,
+    
+        publicKey as PublicKey,
       );
 
     if (
@@ -172,10 +219,7 @@ export function verifyEnvelopeSignature(
         reason:
           "Envelope signature verification failed",
 
-        digest:
-          createSigningDigest(
-            envelope,
-          ),
+        digest,
       };
     }
 
@@ -185,7 +229,7 @@ export function verifyEnvelopeSignature(
      */
     const derivedAddress =
       deriveAddress(
-        publicKey,
+        publicKey as PublicKey,
       );
 
     /**
@@ -199,15 +243,12 @@ export function verifyEnvelopeSignature(
         success: false,
 
         error:
-          SignatureVerificationError.INVALID_SENDER,
+          SignatureVerificationError.ADDRESS_MISMATCH,
 
         reason:
-          "Envelope sender does not match signer identity",
+          "Sender address does not match derived public key address",
 
-        digest:
-          createSigningDigest(
-            envelope,
-          ),
+        digest,
       };
     }
 
@@ -217,10 +258,7 @@ export function verifyEnvelopeSignature(
     return {
       success: true,
 
-      digest:
-        createSigningDigest(
-          envelope,
-        ),
+      digest,
     };
   } catch (
     error

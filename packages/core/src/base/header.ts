@@ -44,6 +44,17 @@ export const HeaderSchema =
         ),
 
     /*
+     * public key
+     */
+    publicKey:
+      z.string()
+        .regex(
+          /^0x[a-fA-F0-9]+$/,
+          "Invalid public key",
+        ),
+
+
+    /*
      * UNIX timestamp in milliseconds
      */
     timestamp:

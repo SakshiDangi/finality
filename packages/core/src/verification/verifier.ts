@@ -138,7 +138,6 @@ export function verifyEnvelope(
   const signatureResult =
     verifyEnvelopeSignature(
       envelope,
-      context.publicKey,
     );
 
   if (

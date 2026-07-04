@@ -13,377 +13,543 @@ import {
 } from "../../crypto/identity.js";
 
 import {
-  signPayload,
-} from "../../crypto/signatures.js";
-
-import {
   createSigningPayload,
   createSigningDigest,
   verifyEnvelopeSignature,
   SignatureVerificationError,
 } from "../../verification/signature.js";
 
+import {
+  signEnvelope,
+} from "../../crypto/signatures.js";
 
-// core feature correctness and identity
-describe("verification/signature (core)", () => {
-  it("should verify a valid signed envelope", () => {
-    const identity = createIdentity();
+/* =========================================
+ * HELPERS
+ * =======================================*/
 
-    const envelope = makeEnvelope();
+function signTestEnvelope() {
+  const identity =
+    createIdentity();
 
-    // bind signer identity
-    envelope.header.sender = identity.address;
+  const envelope =
+    makeEnvelope();
 
-    // sign canonical payload
-    envelope.signature = signPayload(
-      createSigningPayload(envelope),
+  envelope.header.sender =
+    identity.address;
+
+  envelope.header.publicKey =
+    identity.publicKey;
+
+  envelope.signature =
+    signEnvelope(
+      createSigningPayload(
+        envelope,
+      ),
       identity.privateKey,
     );
 
-    const result = verifyEnvelopeSignature(
-      envelope,
-      identity.publicKey,
-    );
-
-    expect(result.success).toBe(true);
-    expect(result.error).toBeUndefined();
-    expect(result.digest).toBeDefined();
-  });
-
-  it("should reject envelope without signature", () => {
-    const identity = createIdentity();
-
-    const envelope = makeEnvelope();
-
-    envelope.header.sender = identity.address;
-
-    // remove signature
-    envelope.signature = "" as any;
-
-    const result = verifyEnvelopeSignature(
-      envelope,
-      identity.publicKey,
-    );
-
-    expect(result.success).toBe(false);
-
-    expect(result.error).toBe(
-      SignatureVerificationError.SIGNATURE_MISSING,
-    );
-  });
-
-  it("should reject verification with wrong public key", () => {
-    const signer = createIdentity();
-    const attacker = createIdentity();
-
-    const envelope = makeEnvelope();
-
-    envelope.header.sender = signer.address;
-
-    envelope.signature = signPayload(
-      createSigningPayload(envelope),
-      signer.privateKey,
-    );
-
-    const result = verifyEnvelopeSignature(
-      envelope,
-      attacker.publicKey,
-    );
-
-    expect(result.success).toBe(false);
-
-    expect(result.error).toBe(
-      SignatureVerificationError.INVALID_SIGNATURE,
-    );
-  });
-
-  it("should reject sender mismatch even if signature is valid", () => {
-    const signer = createIdentity();
-
-    const envelope = makeEnvelope();
-
-    // WRONG sender injected
-    envelope.header.sender =
-      "0x1111111111111111111111111111111111111111";
-
-    envelope.signature = signPayload(
-      createSigningPayload(envelope),
-      signer.privateKey,
-    );
-
-    const result = verifyEnvelopeSignature(
-      envelope,
-      signer.publicKey,
-    );
-
-    expect(result.success).toBe(false);
-
-    expect(result.error).toBe(
-      SignatureVerificationError.INVALID_SENDER,
-    );
-  });
-});
-
-// tamper, replay and integrity test
-
-describe("verification/signature (integrity)", () => {
-  it("should reject modified payload after signing", () => {
-    const identity = createIdentity();
-
-    const envelope = makeEnvelope();
-
-    envelope.header.sender = identity.address;
-
-    envelope.signature = signPayload(
-      createSigningPayload(envelope),
-      identity.privateKey,
-    );
-
-    //  tamper payload AFTER signing
-    envelope.payload = {
-      ...envelope.payload,
-      amount: 999999,
-    };
-
-    const result = verifyEnvelopeSignature(
-      envelope,
-      identity.publicKey,
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe(
-      SignatureVerificationError.INVALID_SIGNATURE,
-    );
-  });
-
-  it("should reject modified header after signing", () => {
-    const identity = createIdentity();
-
-    const envelope = makeEnvelope();
-
-    envelope.header.sender = identity.address;
-
-    envelope.signature = signPayload(
-      createSigningPayload(envelope),
-      identity.privateKey,
-    );
-
-    //  tamper header AFTER signing
-    envelope.header.nonce += 1;
-
-    const result = verifyEnvelopeSignature(
-      envelope,
-      identity.publicKey,
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe(
-      SignatureVerificationError.INVALID_SIGNATURE,
-    );
-  });
-
-  it("should reject manually corrupted signature bytes", () => {
-    const identity = createIdentity();
-
-    const envelope = makeEnvelope();
-
-    envelope.header.sender = identity.address;
-
-    envelope.signature = signPayload(
-      createSigningPayload(envelope),
-      identity.privateKey,
-    );
-
-    //  corrupt signature
-    envelope.signature =
-      ("0x" + "ff".repeat(64)) as any;
-
-    const result = verifyEnvelopeSignature(
-      envelope,
-      identity.publicKey,
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe(
-      SignatureVerificationError.INVALID_SIGNATURE,
-    );
-  });
-
-  it("should reject nonce modification (replay protection assumption)", () => {
-    const identity = createIdentity();
-
-    const envelope = makeEnvelope();
-
-    envelope.header.sender = identity.address;
-
-    envelope.signature = signPayload(
-      createSigningPayload(envelope),
-      identity.privateKey,
-    );
-
-    const originalNonce = envelope.header.nonce;
-
-    //  replay / modify nonce
-    envelope.header.nonce = originalNonce + 1;
-
-    const result = verifyEnvelopeSignature(
-      envelope,
-      identity.publicKey,
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe(
-      SignatureVerificationError.INVALID_SIGNATURE,
-    );
-  });
-});
-
-
-// canonicalization, determinism, protocol guarantees
-
-describe("verification/signature (canonicalization + determinism)", () => {
-  it("should verify identical result for reordered payload keys", () => {
-    const identity = createIdentity();
-
-    const envelopeA = makeEnvelope();
-    const envelopeB = makeEnvelope();
-
-    envelopeA.header.sender = identity.address;
-    envelopeB.header.sender = identity.address;
-
-    envelopeA.payload = {
-      amount: 100,
-      asset: "USDC",
-    };
-
-    envelopeB.payload = {
-      asset: "USDC",
-      amount: 100,
-    };
-
-    envelopeA.signature = signPayload(
-      createSigningPayload(envelopeA),
-      identity.privateKey,
-    );
-
-    envelopeB.signature = signPayload(
-      createSigningPayload(envelopeB),
-      identity.privateKey,
-    );
-
-    const resultA = verifyEnvelopeSignature(
-      envelopeA,
-      identity.publicKey,
-    );
-
-    const resultB = verifyEnvelopeSignature(
-      envelopeB,
-      identity.publicKey,
-    );
-
-    expect(resultA.success).toBe(true);
-    expect(resultB.success).toBe(true);
-    expect(resultA.digest).toBe(resultB.digest);
-  });
-
-  it("should produce identical digest for logically equivalent payloads", () => {
-    const identity = createIdentity();
-
-    const envelopeA = makeEnvelope();
-    const envelopeB = makeEnvelope();
-
-    envelopeA.header.sender = identity.address;
-    envelopeB.header.sender = identity.address;
-
-    envelopeA.payload = { a: 1, b: 2 };
-    envelopeB.payload = { b: 2, a: 1 };
-
-    const digestA = createSigningDigest(envelopeA);
-    const digestB = createSigningDigest(envelopeB);
-
-    expect(digestA).toBe(digestB);
-  });
-
-  it("should ignore metadata changes in signing", () => {
-    const identity = createIdentity();
-
-    const envelope = makeEnvelope();
-
-    envelope.header.sender = identity.address;
-
-    envelope.metadata = {
-      traceId: "trace-1",
-    };
-
-    envelope.signature = signPayload(
-      createSigningPayload(envelope),
-      identity.privateKey,
-    );
-
-    const modified = {
-      ...envelope,
-      metadata: {
-        traceId: "trace-999",
+  return {
+    identity,
+    envelope,
+  };
+}
+
+/* =========================================
+ * HAPPY PATH
+ * =======================================*/
+
+describe(
+  "verification/signature (happy path)",
+  () => {
+    it(
+      "should verify valid signed envelope",
+      () => {
+        const {
+          envelope,
+        } =
+          signTestEnvelope();
+
+        const result =
+          verifyEnvelopeSignature(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(true);
+
+        expect(
+          result.error,
+        ).toBeUndefined();
+
+        expect(
+          result.digest,
+        ).toBeDefined();
       },
-    };
+    );
+  },
+);
 
-    const result = verifyEnvelopeSignature(
-      modified,
-      identity.publicKey,
+/* =========================================
+ * MALFORMED INPUT
+ * =======================================*/
+
+describe(
+  "verification/signature (malformed input)",
+  () => {
+    it(
+      "should reject missing signature",
+      () => {
+        const {
+          envelope,
+        } =
+          signTestEnvelope();
+
+        envelope.signature =
+          "" as any;
+
+        const result =
+          verifyEnvelopeSignature(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+
+        expect(
+          result.error,
+        ).toBe(
+          SignatureVerificationError.SIGNATURE_MISSING,
+        );
+      },
     );
 
-    expect(result.success).toBe(true);
-  });
+    it(
+      "should reject malformed envelope",
+      () => {
+        const result =
+          verifyEnvelopeSignature(
+            null as any,
+          );
 
-  it("should exclude metadata from signing payload", () => {
-    const envelope = makeEnvelope();
+        expect(
+          result.success,
+        ).toBe(false);
 
-    const payload = createSigningPayload(envelope);
-
-    expect(payload).not.toHaveProperty("metadata");
-  });
-
-  it("should exclude signature from signing payload", () => {
-    const envelope = makeEnvelope();
-
-    const payload = createSigningPayload(envelope);
-
-    expect(payload).not.toHaveProperty("signature");
-  });
-
-  it("should produce deterministic signing digest across runs", () => {
-    const identity = createIdentity();
-
-    const envelope = makeEnvelope();
-
-    envelope.header.sender = identity.address;
-
-    envelope.payload = {
-      asset: "USDC",
-      amount: 100,
-    };
-
-    const d1 = createSigningDigest(envelope);
-    const d2 = createSigningDigest(envelope);
-    const d3 = createSigningDigest(envelope);
-
-    expect(d1).toBe(d2);
-    expect(d2).toBe(d3);
-  });
-
-  it("should fail gracefully for malformed envelope input", () => {
-    const identity = createIdentity();
-
-    const badEnvelope = null as any;
-
-    const result = verifyEnvelopeSignature(
-      badEnvelope,
-      identity.publicKey,
+        expect(
+          result.error,
+        ).toBe(
+          SignatureVerificationError.MALFORMED_ENVELOPE,
+        );
+      },
     );
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe(
-      SignatureVerificationError.MALFORMED_ENVELOPE,
+    it(
+      "should reject invalid signature bytes",
+      () => {
+        const {
+          envelope,
+        } =
+          signTestEnvelope();
+
+        envelope.signature =
+          (
+            "0x" +
+            "ff".repeat(64)
+          ) as any;
+
+        const result =
+          verifyEnvelopeSignature(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+
+        expect(
+          result.error,
+        ).toBe(
+          SignatureVerificationError.INVALID_SIGNATURE,
+        );
+      },
     );
-  });
-});
+  },
+);
+
+/* =========================================
+ * INTEGRITY PROTECTION
+ * =======================================*/
+
+describe(
+  "verification/signature (integrity)",
+  () => {
+    it(
+      "should reject modified payload after signing",
+      () => {
+        const {
+          envelope,
+        } =
+          signTestEnvelope();
+
+        envelope.payload = {
+          ...envelope.payload,
+
+          amount: 999999,
+        };
+
+        const result =
+          verifyEnvelopeSignature(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+
+        expect(
+          result.error,
+        ).toBe(
+          SignatureVerificationError.INVALID_SIGNATURE,
+        );
+      },
+    );
+
+    it(
+      "should reject modified header after signing",
+      () => {
+        const {
+          envelope,
+        } =
+          signTestEnvelope();
+
+        envelope.header.nonce += 1;
+
+        const result =
+          verifyEnvelopeSignature(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+
+        expect(
+          result.error,
+        ).toBe(
+          SignatureVerificationError.INVALID_SIGNATURE,
+        );
+      },
+    );
+
+    it(
+      "should reject modified sender identity",
+      () => {
+        const {
+          envelope,
+        } =
+          signTestEnvelope();
+
+        envelope.header.sender =
+          "0x1111111111111111111111111111111111111111";
+
+        const result =
+          verifyEnvelopeSignature(
+            envelope,
+          );
+
+        expect(
+          result.success,
+        ).toBe(false);
+
+        /**
+         * Sender exists
+         * inside signed payload.
+         *
+         * Therefore changing sender
+         * invalidates signature first.
+         */
+        expect(
+          result.error,
+        ).toBe(
+          SignatureVerificationError.INVALID_SIGNATURE,
+        );
+      },
+    );
+  },
+);
+
+/* =========================================
+ * CANONICALIZATION
+ * =======================================*/
+
+describe(
+  "verification/signature (canonicalization)",
+  () => {
+    it(
+      "should produce identical digest for reordered keys",
+      () => {
+        const identity =
+          createIdentity();
+    
+        /**
+         * Base envelope.
+         */
+        const base =
+          makeEnvelope();
+    
+        base.header.sender =
+          identity.address;
+    
+        /**
+         * Clone SAME envelope.
+         */
+        const envelopeA =
+          structuredClone(base);
+    
+        const envelopeB =
+          structuredClone(base);
+    
+        /**
+         * Same logical payload.
+         * Different key order.
+         */
+        envelopeA.payload = {
+          a: 1,
+          b: 2,
+        };
+    
+        envelopeB.payload = {
+          b: 2,
+          a: 1,
+        };
+    
+        const digestA =
+          createSigningDigest(
+            envelopeA,
+          );
+    
+        const digestB =
+          createSigningDigest(
+            envelopeB,
+          );
+    
+        expect(
+          digestA,
+        ).toBe(
+          digestB,
+        );
+      },
+    );
+
+    it(
+      "should verify reordered payload keys",
+      () => {
+        const identity =
+          createIdentity();
+    
+        const baseEnvelope =
+          makeEnvelope();
+    
+        /**
+         * IMPORTANT:
+         * sender + publicKey
+         * must BOTH exist.
+         */
+        baseEnvelope.header.sender =
+          identity.address;
+    
+        baseEnvelope.header.publicKey =
+          identity.publicKey;
+    
+        /**
+         * Clone identical envelope.
+         */
+        const envelopeA =
+          structuredClone(
+            baseEnvelope,
+          );
+    
+        const envelopeB =
+          structuredClone(
+            baseEnvelope,
+          );
+    
+        /**
+         * Same logical payload.
+         * Different key order.
+         */
+        envelopeA.payload = {
+          amount: 100,
+          asset: "USDC",
+        };
+    
+        envelopeB.payload = {
+          asset: "USDC",
+          amount: 100,
+        };
+    
+        /**
+         * Independent signatures.
+         */
+        envelopeA.signature =
+          signEnvelope(
+            envelopeA,
+            identity.privateKey,
+          );
+    
+        envelopeB.signature =
+          signEnvelope(
+            envelopeB,
+            identity.privateKey,
+          );
+    
+        const resultA =
+          verifyEnvelopeSignature(
+            envelopeA,
+          );
+    
+        const resultB =
+          verifyEnvelopeSignature(
+            envelopeB,
+          );
+    
+        expect(
+          resultA.success,
+        ).toBe(true);
+    
+        expect(
+          resultB.success,
+        ).toBe(true);
+    
+        /**
+         * Canonicalization guarantee.
+         */
+        expect(
+          resultA.digest,
+        ).toBe(
+          resultB.digest,
+        );
+      },
+    );
+  },
+);
+
+/* =========================================
+ * DETERMINISTIC GUARANTEES
+ * =======================================*/
+
+describe(
+  "verification/signature (determinism)",
+  () => {
+    it(
+      "should exclude metadata from signing payload",
+      () => {
+        const envelope =
+          makeEnvelope();
+
+        const payload =
+          createSigningPayload(
+            envelope,
+          );
+
+        expect(
+          payload,
+        ).not.toHaveProperty(
+          "metadata",
+        );
+      },
+    );
+
+    it(
+      "should exclude signature from signing payload",
+      () => {
+        const envelope =
+          makeEnvelope();
+
+        const payload =
+          createSigningPayload(
+            envelope,
+          );
+
+        expect(
+          payload,
+        ).not.toHaveProperty(
+          "signature",
+        );
+      },
+    );
+
+    it(
+      "should ignore metadata changes in verification",
+      () => {
+        const {
+          envelope,
+          identity,
+        } =
+          signTestEnvelope();
+
+        envelope.metadata = {
+          traceId:
+            "trace-1",
+        };
+
+        envelope.signature =
+          signEnvelope(
+            createSigningPayload(
+              envelope,
+            ),
+            identity.privateKey,
+          );
+
+        const modified = {
+          ...envelope,
+
+          metadata: {
+            traceId:
+              "trace-999",
+          },
+        };
+
+        const result =
+          verifyEnvelopeSignature(
+            modified,
+          );
+
+        expect(
+          result.success,
+        ).toBe(true);
+      },
+    );
+
+    it(
+      "should produce deterministic digest across runs",
+      () => {
+        const {
+          envelope,
+        } =
+          signTestEnvelope();
+
+        const d1 =
+          createSigningDigest(
+            envelope,
+          );
+
+        const d2 =
+          createSigningDigest(
+            envelope,
+          );
+
+        const d3 =
+          createSigningDigest(
+            envelope,
+          );
+
+        expect(d1).toBe(d2);
+
+        expect(d2).toBe(d3);
+      },
+    );
+  },
+);

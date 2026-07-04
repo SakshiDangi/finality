@@ -22,7 +22,10 @@ describe("base/header", () => {
 
         sender:
           "0x1111111111111111111111111111111111111111",
-
+        
+        publicKey:
+          "0x02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        
         timestamp:
           Date.now(),
 
@@ -48,6 +51,9 @@ describe("base/header", () => {
 
         sender:
           "0x1111111111111111111111111111111111111111",
+
+        publicKey:
+          "0x02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 
         timestamp:
           Date.now(),
@@ -122,6 +128,9 @@ describe("base/header", () => {
         sender:
           "0x1111111111111111111111111111111111111111",
 
+        publicKey:
+          "0x02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+
         timestamp:
           Date.now(),
 
@@ -147,6 +156,9 @@ describe("base/header", () => {
 
         sender:
           "0x1111111111111111111111111111111111111111",
+
+        publicKey:
+          "0x02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 
         timestamp:
           Date.now(),

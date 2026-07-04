@@ -2,12 +2,12 @@ import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 
 import {
-  canonicalSerialize,
-} from "./canonical.js";
+  type UnsignedEnvelope,
+} from "../base/envelope.js";
 
 import {
-  protocolHash,
-} from "./hashing.js";
+  createSigningDigest,
+} from "../verification/signature.js";
 
 /**
  * Hex signature string.
@@ -44,57 +44,60 @@ function hexToBytes(
 }
 
 /**
- * Sign arbitrary payload.
- *
- * Flow:
+ * Sign arbitrary payload. (header + payload)
  *
  * payload
- * -> canonical serialization
- * -> keccak256 hash
- * -> secp256k1 sign
+ * -> canonicalizeEnvelope()
+ * -> protocolHash()
+ * -> secp256k1.sign()
  */
-export function signPayload(
-  payload: unknown,
-  privateKey: PrivateKey,
+
+export function signEnvelope(
+envelope: UnsignedEnvelope,
+privateKey: PrivateKey,
 ): Signature {
-  const serialized =
-    canonicalSerialize(payload);
+/**
 
+* Deterministic protocol digest.  */
   const digest =
-    protocolHash(serialized);
-
-  const signature = 
-    secp256k1.sign(
-        hexToBytes(digest), 
-        hexToBytes(privateKey), 
-    ); 
-    return `0x${bytesToHex(signature)}`;
-}
+  createSigningDigest(
+  envelope,
+  );
 
 /**
- * Verify payload signature.
- */
-export function verifyPayloadSignature(
-  payload: unknown,
-  signature: Signature,
-  publicKey: PublicKey,
-): boolean {
-  try {
-    const serialized =
-      canonicalSerialize(payload);
+* secp256k1 signature.
+  */
+  const signature =
+    secp256k1.sign(
+      hexToBytes(digest),
+      hexToBytes(privateKey),
+    );
 
-    const digest =
-      protocolHash(serialized);
-
-    return secp256k1.verify(
-         hexToBytes(signature),
-         hexToBytes(digest),
-         hexToBytes(publicKey), 
-        );
-  } catch {
-    return false;
-  }
+  return `0x${bytesToHex(
+    signature,
+  )}`;
 }
+
+
+/**
+ * Verify payload signature. (multiple signing boundaries)
+ */
+export function verifyDigestSignature(
+digest: string,
+signature: Signature,
+publicKey: PublicKey,
+): boolean {
+try {
+return secp256k1.verify(
+hexToBytes(signature),
+hexToBytes(digest),
+hexToBytes(publicKey),
+);
+} catch {
+return false;
+}
+}
+
 
 /**
  * Generate public key
@@ -110,3 +113,14 @@ export function derivePublicKey(
 
   return `0x${bytesToHex(publicKey)}`;
 }
+
+
+// verification/signature.ts
+//     owns:
+//       canonicalization
+//       digest generation
+//       signing boundaries
+
+// crypto/signatures.ts
+//     owns:
+//       raw secp256k1 operations

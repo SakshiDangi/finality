@@ -46,8 +46,8 @@ export type {
 
 export {
   derivePublicKey,
-  signPayload,
-  verifyPayloadSignature,
+  signEnvelope,
+  verifyDigestSignature,
 } from "./signatures.js";
 
 export type {

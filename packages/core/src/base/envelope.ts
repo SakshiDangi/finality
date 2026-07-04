@@ -39,19 +39,16 @@ export const EnvelopeMetadataSchema =
     z.unknown(),
   );
 
+/* =========================================
+ * UNSIGNED ENVELOPE
+ * =======================================*/
+
 /**
- * Canonical protocol envelope.
+ * Unsigned protocol envelope.
  *
- * This is the primary transport object
- * exchanged across:
- *
- * - validators
- * - relayers
- * - settlement engines
- * - wrappers
- * - synchronization layers
+ * Exists BEFORE cryptographic signing.
  */
-export const EnvelopeSchema =
+export const UnsignedEnvelopeSchema =
   z.strictObject({
     /**
      * Protocol control plane data.
@@ -68,18 +65,6 @@ export const EnvelopeSchema =
       EnvelopePayloadSchema,
 
     /**
-     * Canonical cryptographic signature.
-     *
-     * Usually signs:
-     *
-     * canonicalize(
-     *   header + payload
-     * )
-     */
-    signature:
-      HexStringSchema,
-
-    /**
      * Optional runtime metadata.
      *
      * NEVER signed.
@@ -89,6 +74,35 @@ export const EnvelopeSchema =
       EnvelopeMetadataSchema
         .optional(),
   });
+
+/* =========================================
+ * SIGNED ENVELOPE
+ * =======================================*/
+
+/**
+ * Canonical signed protocol envelope.
+ *
+ * This is the primary transport object
+ * exchanged across:
+ *
+ * - validators
+ * - relayers
+ * - settlement engines
+ * - wrappers
+ * - synchronization layers
+ */
+export const EnvelopeSchema =
+  UnsignedEnvelopeSchema.extend({
+    /**
+     * Canonical cryptographic signature.
+     */
+    signature:
+      HexStringSchema,
+  });
+
+/* =========================================
+ * TYPES
+ * =======================================*/
 
 /**
  * Runtime envelope payload type.
@@ -107,9 +121,17 @@ export type EnvelopeMetadata =
   >;
 
 /**
- * Canonical protocol envelope type.
+ * Signed envelope type.
  */
 export type Envelope =
   z.infer<
     typeof EnvelopeSchema
   >;
+
+export interface UnsignedEnvelope {
+  header:
+    Envelope["header"];
+
+  payload:
+    Envelope["payload"];
+}

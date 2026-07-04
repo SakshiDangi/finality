@@ -4,39 +4,99 @@ import {
   it,
 } from "vitest";
 
-import {
-  derivePublicKey,
-  signPayload,
-  verifyPayloadSignature,
-} from "../../crypto/signatures.js";
+import type {
+  Envelope,
+} from "../../base/envelope.js";
 
 import {
   generatePrivateKey,
 } from "../../crypto/identity.js";
 
+import {
+  createSigningDigest,
+} from "../../verification/signature.js";
+
+import {
+  derivePublicKey,
+  signEnvelope,
+  verifyDigestSignature,
+} from "../../crypto/signatures.js";
+
 describe(
   "crypto/signatures",
   () => {
+    /**
+     * Deterministic test envelope.
+     */
+    function createEnvelope(): Envelope {
+      return {
+        header: {
+          messageId:
+            "msg-1",
+    
+          domain:
+            "FINALITY_CORE_V1",
+    
+          messageKind:
+            "REQUEST",
+    
+          sender:
+            "0x1111111111111111111111111111111111111111",
+    
+          publicKey:
+            "0x02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    
+          timestamp:
+            Date.now(),
+    
+          nonce: 1,
+    
+          sequence: 1,
+    
+          ttl:
+            30000,
+    
+          signatureAlgorithm:
+            "SECP256K1",
+    
+          priority:
+            "NORMAL",
+    
+          protocol:
+            "FINALITY",
+    
+          version:
+            "1.0.0",
+        },
+    
+        payload: {
+          amount: 100,
+          asset: "USDC",
+        },
+    
+        signature:
+          "0xdeadbeef",
+      };
+    }
+
     it(
-      "should sign payload successfully",
+      "should sign envelope successfully",
       () => {
         const privateKey =
           generatePrivateKey();
 
-        const payload = {
-          amount: 100,
-          asset: "USDC",
-        };
+        const envelope =
+          createEnvelope();
 
         const signature =
-          signPayload(
-            payload,
+          signEnvelope(
+            envelope,
             privateKey,
           );
 
         expect(signature)
           .toMatch(
-            /^0x[a-f0-9]+$/,
+            /^0x[a-f0-9]+$/i,
           );
       },
     );
@@ -52,20 +112,26 @@ describe(
             privateKey,
           );
 
-        const payload = {
-          amount: 100,
-          asset: "ETH",
-        };
+        const envelope =
+          createEnvelope();
+
+        envelope.header.publicKey =
+          publicKey;
 
         const signature =
-          signPayload(
-            payload,
+          signEnvelope(
+            envelope,
             privateKey,
           );
 
+        const digest =
+          createSigningDigest(
+            envelope,
+          );
+
         const verified =
-          verifyPayloadSignature(
-            payload,
+          verifyDigestSignature(
+            digest,
             signature,
             publicKey,
           );
@@ -76,7 +142,7 @@ describe(
     );
 
     it(
-      "should reject modified payload",
+      "should reject modified envelope",
       () => {
         const privateKey =
           generatePrivateKey();
@@ -86,25 +152,32 @@ describe(
             privateKey,
           );
 
-        const originalPayload = {
-          amount: 100,
-          asset: "USDC",
-        };
+        const envelope =
+          createEnvelope();
 
-        const modifiedPayload = {
-          amount: 999,
-          asset: "USDC",
-        };
+        envelope.header.publicKey =
+          publicKey;
 
         const signature =
-          signPayload(
-            originalPayload,
+          signEnvelope(
+            envelope,
             privateKey,
           );
 
+        /**
+         * Tamper AFTER signing.
+         */
+        envelope.payload.amount =
+          999;
+
+        const digest =
+          createSigningDigest(
+            envelope,
+          );
+
         const verified =
-          verifyPayloadSignature(
-            modifiedPayload,
+          verifyDigestSignature(
+            digest,
             signature,
             publicKey,
           );
@@ -128,20 +201,23 @@ describe(
             attackerPrivateKey,
           );
 
-        const payload = {
-          settlementId:
-            "settlement-1",
-        };
+        const envelope =
+          createEnvelope();
 
         const signature =
-          signPayload(
-            payload,
+          signEnvelope(
+            envelope,
             signerPrivateKey,
           );
 
+        const digest =
+          createSigningDigest(
+            envelope,
+          );
+
         const verified =
-          verifyPayloadSignature(
-            payload,
+          verifyDigestSignature(
+            digest,
             signature,
             attackerPublicKey,
           );
@@ -152,41 +228,83 @@ describe(
     );
 
     it(
-      "should produce deterministic verification across reordered payload keys",
+      "should produce deterministic digest across reordered payload keys",
       () => {
-        const privateKey =
-          generatePrivateKey();
-
-        const publicKey =
-          derivePublicKey(
-            privateKey,
-          );
-
-        const leftPayload = {
-          amount: 100,
-          asset: "USDC",
+        const left: Envelope = {
+          header: {
+            messageId:
+              "msg-1",
+        
+            domain:
+              "FINALITY_CORE_V1",
+        
+            messageKind:
+              "REQUEST",
+        
+            sender:
+              "0x1111111111111111111111111111111111111111",
+        
+            publicKey:
+              "0x02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        
+            timestamp:
+              1,
+        
+            nonce: 1,
+        
+            sequence: 1,
+        
+            ttl: 30000,
+        
+            signatureAlgorithm:
+              "SECP256K1",
+        
+            priority:
+              "NORMAL",
+        
+            protocol:
+              "FINALITY",
+        
+            version:
+              "1.0.0",
+          },
+        
+          payload: {
+            amount: 100,
+            asset: "USDC",
+          },
+        
+          signature:
+            "0xdeadbeef",
         };
 
-        const rightPayload = {
-          asset: "USDC",
-          amount: 100,
+        const right: Envelope = {
+          header:
+            left.header,
+        
+          payload: {
+            asset: "USDC",
+            amount: 100,
+          },
+        
+          signature:
+            "0xdeadbeef",
         };
 
-        const signature =
-          signPayload(
-            leftPayload,
-            privateKey,
+        const leftDigest =
+          createSigningDigest(
+            left,
           );
 
-        const verified =
-          verifyPayloadSignature(
-            rightPayload,
-            signature,
-            publicKey,
+        const rightDigest =
+          createSigningDigest(
+            right,
           );
 
-        expect(verified)
-          .toBe(true);
+        expect(leftDigest)
+          .toBe(
+            rightDigest,
+          );
       },
     );
 
@@ -201,13 +319,17 @@ describe(
             privateKey,
           );
 
-        const payload = {
-          hello: "world",
-        };
+        const envelope =
+          createEnvelope();
+
+        const digest =
+          createSigningDigest(
+            envelope,
+          );
 
         const verified =
-          verifyPayloadSignature(
-            payload,
+          verifyDigestSignature(
+            digest,
             "0xdeadbeef",
             publicKey,
           );
@@ -230,7 +352,7 @@ describe(
 
         expect(publicKey)
           .toMatch(
-            /^0x[a-f0-9]+$/,
+            /^0x[a-f0-9]+$/i,
           );
       },
     );

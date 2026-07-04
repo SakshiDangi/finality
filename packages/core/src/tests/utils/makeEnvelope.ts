@@ -1,51 +1,66 @@
-import type { Envelope } from "../../base/envelope.js";
-import {
-  MESSAGE_KIND,
-  PACKET_PRIORITY,
-  SIGNATURE_ALGORITHM,
-} from "../../base/enums.js";
+import type {
+  Envelope,
+} from "../../base/envelope.js";
 
-export function makeEnvelope(
-    overrides: Partial<Envelope> = {},
-): Envelope {
+import {
+  createIdentity,
+} from "../../crypto/identity.js";
+
+export function makeEnvelope(): Envelope {
+  const identity =
+    createIdentity();
+
   return {
     header: {
-      messageId: "msg-1",
-      domain: "FINALITY_CORE_V1",
+      messageId:
+        crypto.randomUUID(),
+
+      domain:
+        "FINALITY_CORE_V1",
 
       messageKind:
-        MESSAGE_KIND.REQUEST,
+        "REQUEST",
 
       sender:
-        "0x1111111111111111111111111111111111111111",
+        identity.address,
 
-      timestamp: Date.now(),
+      publicKey:
+        identity.publicKey,
 
-      nonce: 1,
+      timestamp:
+        Date.now(),
 
-      sequence: 1,
+      nonce:
+        1,
 
-      ttl: 30000,
+      sequence:
+        0,
+
+      ttl:
+        30_000,
 
       signatureAlgorithm:
-        SIGNATURE_ALGORITHM.SECP256K1,
+        "SECP256K1",
 
       priority:
-        PACKET_PRIORITY.NORMAL,
+        "NORMAL",
 
-      protocol: "FINALITY",
+      protocol:
+        "FINALITY",
 
-      version: "1.0.0",
+      version:
+        "1.0.0",
     },
 
     payload: {
-      amount: 100,
-      asset: "USDC",
+      amount:
+        100,
+
+      asset:
+        "USDC",
     },
 
     signature:
-      ("0x" + "00".repeat(64)) as `0x${string}`,
-
-    metadata: {},
+      "0x00",
   };
 }

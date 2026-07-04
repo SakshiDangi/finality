@@ -62,6 +62,9 @@ describe(
 
           sender:
             "0x1111111111111111111111111111111111111111",
+          
+          publicKey:
+            "0x" + "11".repeat(33),
 
           timestamp:
             Date.now(),
