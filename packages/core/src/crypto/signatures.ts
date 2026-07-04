@@ -9,23 +9,11 @@ import {
   createSigningDigest,
 } from "../verification/signature.js";
 
-/**
- * Hex signature string.
- */
-export type Signature =
-  `0x${string}`;
-
-/**
- * Hex private key.
- */
-export type PrivateKey =
-  `0x${string}`;
-
-/**
- * Hex public key.
- */
-export type PublicKey =
-  `0x${string}`;
+import type {
+  SignatureHex as Signature,
+  PrivateKey,
+  PublicKey,
+} from "../base/primitives.js";
 
 /**
  * Convert hex string into bytes.

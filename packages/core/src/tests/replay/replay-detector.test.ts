@@ -16,12 +16,8 @@ import {
 } from "../../replay/replay-detector.js";
 
 import {
-  InMemoryReplayCache,
-} from "../../replay/replay-cache.js";
-
-import {
-  InMemoryNonceManager,
-} from "../../replay/nonce-manager.js";
+  InMemoryReplayStore,
+} from "../../storage/replay-store.js";
 
 describe(
   "detectReplay",
@@ -31,11 +27,8 @@ describe(
 
     beforeEach(() => {
       context = {
-        replayCache:
-          new InMemoryReplayCache(),
-
-        nonceManager:
-          new InMemoryNonceManager(),
+        store:
+          new InMemoryReplayStore(),
 
         currentTime:
           Date.now(),
@@ -62,9 +55,10 @@ describe(
 
           sender:
             "0x1111111111111111111111111111111111111111",
-          
+
           publicKey:
-            "0x" + "11".repeat(33),
+            ("0x" +
+              "11".repeat(33)) as `0x${string}`,
 
           timestamp:
             Date.now(),
@@ -94,11 +88,12 @@ describe(
           action:
             "TRANSFER",
 
-          amount: 100,
+          amount:
+            100,
         },
 
         signature:
-          "0xsignature",
+          "0xsignature" as `0x${string}`,
       };
     }
 
@@ -190,17 +185,18 @@ describe(
          * Different payload
          * but same nonce.
          */
-        const envelopeB =
-          {
-            ...createEnvelope(5),
+        const envelopeB:
+          Envelope = {
+          ...createEnvelope(5),
 
-            payload: {
-              action:
-                "UPDATED",
+          payload: {
+            action:
+              "UPDATED",
 
-              amount: 999,
-            },
-          };
+            amount:
+              999,
+          },
+        };
 
         const result =
           detectReplay(
@@ -319,7 +315,7 @@ describe(
         ).toBe(true);
 
         expect(
-          context.replayCache.has(
+          context.store.hasReplay(
             result.digest,
           ),
         ).toBe(true);
@@ -339,9 +335,9 @@ describe(
         );
 
         const latestNonce =
-          context.nonceManager.getNonce(
+          context.store.getNonce(
             "0x1111111111111111111111111111111111111111",
-          );
+          )?.nonce;
 
         expect(
           latestNonce,

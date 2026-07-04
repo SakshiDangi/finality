@@ -2,9 +2,9 @@ import {
   Envelope,
 } from "../base/envelope.js";
 
-import {
-  PublicKey,
-} from "../crypto/identity.js";
+import type {
+PublicKey,
+} from "../base/primitives.js";
 
 import {
   verifyEnvelopeSignature,

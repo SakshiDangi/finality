@@ -25,7 +25,7 @@ function makeEnvelope(
       domain: "FINALITY_CORE_V1",
       messageKind: "REQUEST",
       sender: "0x1111111111111111111111111111111111111111",
-      publicKey: "0x" + "11".repeat(33),
+      publicKey: ("0x" + "11".repeat(33)) as `0x${string}`,
       timestamp: 1_000_000,
       nonce: 1,
       sequence: 1,

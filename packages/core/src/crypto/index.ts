@@ -37,7 +37,6 @@ export {
 
 export type {
   HashAlgorithm,
-  HashDigest,
 } from "./hashing.js";
 
 /* ---------------------------------- */
@@ -48,12 +47,6 @@ export {
   derivePublicKey,
   signEnvelope,
   verifyDigestSignature,
-} from "./signatures.js";
-
-export type {
-  PrivateKey,
-  PublicKey,
-  Signature,
 } from "./signatures.js";
 
 /* ---------------------------------- */
@@ -72,7 +65,6 @@ export {
 
 export type {
   KeyPair,
-  ProtocolAddress,
   ProtocolIdentity,
 } from "./identity.js";
 
@@ -96,3 +88,11 @@ export type {
   SigningDomain,
   WrapperDomain,
 } from "./domain.js";
+
+export type {
+  HashDigest,
+  SignatureHex,
+  PrivateKey,
+  PublicKey,
+  ProtocolAddress,
+} from "../base/primitives.js";

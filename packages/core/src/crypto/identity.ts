@@ -11,27 +11,14 @@ import {
 } from "@noble/hashes/utils.js";
 
 import {
-  HashDigest,
   hashString,
 } from "./hashing.js";
 
-/**
- * Protocol private key.
- */
-export type PrivateKey =
-  `0x${string}`;
-
-/**
- * Protocol public key.
- */
-export type PublicKey =
-  `0x${string}`;
-
-/**
- * Protocol address.
- */
-export type ProtocolAddress =
-  `0x${string}`;
+import type {
+  PrivateKey,
+  PublicKey,
+  ProtocolAddress,
+} from "../base/primitives.js";
 
 /**
  * Runtime cryptographic keypair.

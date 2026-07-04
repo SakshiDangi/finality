@@ -153,51 +153,6 @@ export function verifyNonce(
     }
 
     /**
-     * Validate nonce bounds.
-     */
-    if (
-      nonce < 0
-    ) {
-      return {
-        success: false,
-
-        error:
-          NonceVerificationError.INVALID_NONCE,
-
-        reason:
-          "Nonce cannot be negative",
-
-        latestNonce,
-
-        receivedNonce:
-          nonce,
-      };
-    }
-
-    /**
-     * Prevent overflow edge cases.
-     */
-    if (
-      nonce >
-      Number.MAX_SAFE_INTEGER
-    ) {
-      return {
-        success: false,
-
-        error:
-          NonceVerificationError.NONCE_OVERFLOW,
-
-        reason:
-          "Nonce exceeds maximum safe integer",
-
-        latestNonce,
-
-        receivedNonce:
-          nonce,
-      };
-    }
-
-    /**
      * Prevent nonce replay.
      */
     if (

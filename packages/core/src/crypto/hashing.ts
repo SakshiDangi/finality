@@ -7,6 +7,10 @@ import {
   canonicalJSONStringify,
 } from "./canonical.js";
 
+import type {
+  HashDigest,
+} from "../base/primitives.js";
+
 /**
  * Supported protocol hashing algorithms.
  */
@@ -25,12 +29,6 @@ export type HashAlgorithm =
   typeof HASH_ALGORITHM[
     keyof typeof HASH_ALGORITHM
   ];
-
-/**
- * Hex-prefixed digest.
- */
-export type HashDigest =
-  `0x${string}`;
 
 /**
  * Hash raw string input.

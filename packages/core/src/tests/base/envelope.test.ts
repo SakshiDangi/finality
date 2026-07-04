@@ -40,7 +40,7 @@ function makeHeader():
       "0x1111111111111111111111111111111111111111",
 
     publicKey:
-      "0x" + "11".repeat(33),
+      ("0x" + "11".repeat(33)) as `0x${string}`,
 
     timestamp:
       Date.now(),
@@ -258,7 +258,7 @@ describe(
               ...makeHeader(),
 
               sender:
-                "invalid",
+                "invalid" as `0x${string}`,
             },
           };
 

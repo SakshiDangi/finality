@@ -11,7 +11,7 @@ import type {
 
 import type {
   HashDigest,
-} from "../../crypto/hashing.js";
+} from "../../base/primitives.js";
 
 import {
   createIdentity,

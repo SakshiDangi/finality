@@ -9,7 +9,6 @@ import {
 
 import {
   deriveAddress,
-  type PublicKey,
 } from "../crypto/identity.js";
 
 import {
@@ -21,8 +20,10 @@ import {
 } from "../crypto/signatures.js";
 
 import type {
-  Signature,
-} from "../crypto/signatures.js";
+  SignatureHex as Signature,
+  PublicKey,
+  HashDigest,
+} from "../base/primitives.js";
 
 /* =========================================
  * VERIFICATION ERROR CODES
@@ -66,7 +67,7 @@ export interface SignatureVerificationResult {
   /**
    * Deterministic signing digest.
    */
-  digest?: string;
+  digest?: HashDigest;
 }
 
 /* =========================================
@@ -103,7 +104,7 @@ export function createSigningDigest(
   envelope:
   Envelope |
   UnsignedEnvelope,
-): string {
+): HashDigest {
   const canonical =
     canonicalizeEnvelope(
       createSigningPayload(

@@ -1,12 +1,11 @@
 import { z } from "zod";
 
+/* =========================================
+ * CORE RUNTIME SCHEMAS
+ * =======================================*/
+
 /**
  * Universal protocol identifier.
- *
- * Examples:
- * validator-1
- * packet-abc
- * bridge-node-7
  */
 export const IdentifierSchema =
   z.string()
@@ -29,12 +28,12 @@ export const NonceSchema =
     .int()
     .nonnegative();
 
+/* =========================================
+ * HEX TYPES
+ * =======================================*/
+
 /**
  * Canonical hex string.
- *
- * All cryptographic primitives
- * inside the protocol should
- * use strict hex typing.
  */
 export type HexString =
   `0x${string}`;
@@ -59,17 +58,32 @@ export const HexStringSchema =
     },
   );
 
-/**
- * Protocol address.
- *
- * Currently Ethereum-style.
- */
+/* =========================================
+ * CRYPTOGRAPHIC TYPES
+ * =======================================*/
+
+export type HashDigest =
+  `0x${string}`;
+
+export type SignatureHex =
+  `0x${string}`;
+
+export type PrivateKey =
+  `0x${string}`;
+
+export type PublicKey =
+  `0x${string}`;
+
 export type Address =
   `0x${string}`;
 
-/**
- * Runtime protocol address validator.
- */
+export type ProtocolAddress =
+  `0x${string}`;
+
+/* =========================================
+ * ADDRESS SCHEMA
+ * =======================================*/
+
 export const AddressSchema =
   z.custom<Address>(
     (value) => {
@@ -87,10 +101,10 @@ export const AddressSchema =
     },
   );
 
+/* =========================================
+ * INFERRED TYPES
+ * =======================================*/
 
-/**
- * Runtime primitive types.
- */
 export type Identifier =
   z.infer<
     typeof IdentifierSchema

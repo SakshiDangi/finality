@@ -1,34 +1,51 @@
-import {
+import type {
   Envelope,
 } from "../base/envelope.js";
 
-import {
-  ProtocolAddress,
-} from "../crypto/identity.js";
+import type {
+ProtocolAddress,
+HashDigest,
+} from "../base/primitives.js";
+
 
 import {
   createSigningDigest,
 } from "../verification/signature.js";
 
-import {
-  ReplayCache,
-} from "./replay-cache.js";
-
-import {
-  NonceManager,
-} from "./nonce-manager.js";
+import type {
+  ReplayStore,
+} from "../storage/replay-store.js";
 
 /* =========================================
  * REPLAY DETECTION ERRORS
  * =======================================*/
 
+/**
+ * Canonical replay protection failures.
+ *
+ * Used for:
+ *
+ * - validator synchronization
+ * - settlement protection
+ * - replay prevention
+ * - distributed diagnostics
+ */
 export enum ReplayDetectionError {
+  /**
+   * Request digest already executed.
+   */
   DIGEST_REPLAY =
     "DIGEST_REPLAY",
 
+  /**
+   * Exact nonce replay detected.
+   */
   NONCE_REPLAY =
     "NONCE_REPLAY",
 
+  /**
+   * Sender nonce older than latest accepted nonce.
+   */
   NONCE_OUT_OF_ORDER =
     "NONCE_OUT_OF_ORDER",
 }
@@ -37,21 +54,18 @@ export enum ReplayDetectionError {
  * REPLAY DETECTOR CONTEXT
  * =======================================*/
 
+/**
+ * Replay runtime dependencies.
+ */
 export interface ReplayDetectorContext {
   /**
-   * Replay cache backend.
+   * Canonical replay persistence layer.
    */
-  replayCache:
-    ReplayCache;
+  store:
+    ReplayStore;
 
   /**
-   * Sender nonce manager.
-   */
-  nonceManager:
-    NonceManager;
-
-  /**
-   * Deterministic execution time.
+   * Deterministic runtime time.
    */
   currentTime:
     number;
@@ -61,14 +75,18 @@ export interface ReplayDetectorContext {
  * REPLAY DETECTION RESULT
  * =======================================*/
 
+/**
+ * Deterministic replay validation result.
+ */
 export interface ReplayDetectionResult {
   /**
-   * Replay validation result.
+   * Replay validation success state.
    */
-  success: boolean;
+  success:
+    boolean;
 
   /**
-   * Failure reason.
+   * Canonical replay failure.
    */
   error?:
     ReplayDetectionError;
@@ -76,13 +94,14 @@ export interface ReplayDetectionResult {
   /**
    * Human-readable diagnostics.
    */
-  reason?: string;
+  reason?:
+    string;
 
   /**
    * Deterministic request digest.
    */
   digest:
-    string;
+    HashDigest;
 
   /**
    * Sender nonce.
@@ -101,14 +120,16 @@ export interface ReplayDetectionResult {
  * Flow:
  *
  * digest
- * -> replay cache lookup
+ * -> replay lookup
  * -> nonce ordering validation
  * -> persist replay state
  */
 export function detectReplay(
-  envelope: Envelope,
+  envelope:
+    Envelope,
 
-  context: ReplayDetectorContext,
+  context:
+    ReplayDetectorContext,
 ): ReplayDetectionResult {
   /**
    * Deterministic execution identity.
@@ -119,10 +140,10 @@ export function detectReplay(
     );
 
   /**
-   * Sender identity.
+   * Canonical sender identity.
    */
   const sender =
-    envelope.header .sender as ProtocolAddress;
+    envelope.header.sender;
 
   /**
    * Incoming sender nonce.
@@ -130,12 +151,13 @@ export function detectReplay(
   const nonce =
     envelope.header.nonce;
 
-  /**
+  /* =====================================
    * STEP 1
-   * Detect digest replay.
-   */
+   * DETECT DIGEST REPLAY
+   * ===================================*/
+
   if (
-    context.replayCache.has(
+    context.store.hasReplay(
       digest,
     )
   ) {
@@ -154,20 +176,15 @@ export function detectReplay(
     };
   }
 
-  /**
+  /* =====================================
    * STEP 2
-   * Validate nonce ordering.
-   */
-const latestNonce =
-  context.nonceManager?.getNonce?.(sender) ?? 0;
+   * VALIDATE NONCE ORDERING
+   * ===================================*/
 
-if (!context.nonceManager) {
-  throw new Error("ReplayDetectorContext missing nonceManager");
-}
-
-if (!context.replayCache) {
-  throw new Error("ReplayDetectorContext missing replayCache");
-}
+  const latestNonce =
+    context.store.getNonce(
+      sender,
+    )?.nonce ?? 0;
 
   /**
    * Exact nonce replay.
@@ -213,22 +230,28 @@ if (!context.replayCache) {
     };
   }
 
-  /**
+  /* =====================================
    * STEP 3
-   * Persist replay digest.
-   */
-  context.replayCache.set({
+   * PERSIST REPLAY RECORD
+   * ===================================*/
+
+  context.store.setReplay({
     digest,
+
+    sender,
+
+    nonce,
 
     createdAt:
       context.currentTime,
   });
 
-  /**
+  /* =====================================
    * STEP 4
-   * Persist latest sender nonce.
-   */
-  context.nonceManager.setNonce({
+   * PERSIST NONCE STATE
+   * ===================================*/
+
+  context.store.setNonce({
     sender,
 
     nonce,
@@ -237,9 +260,10 @@ if (!context.replayCache) {
       context.currentTime,
   });
 
-  /**
-   * Successful replay validation.
-   */
+  /* =====================================
+   * SUCCESS
+   * ===================================*/
+
   return {
     success: true,
 
