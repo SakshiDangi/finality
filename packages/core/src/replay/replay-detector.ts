@@ -3,10 +3,12 @@ import type {
 } from "../base/envelope.js";
 
 import type {
-ProtocolAddress,
-HashDigest,
+  HashDigest,
 } from "../base/primitives.js";
 
+import {
+  ProtocolState,
+} from "../state/transitions.js";
 
 import {
   createSigningDigest,
@@ -32,19 +34,19 @@ import type {
  */
 export enum ReplayDetectionError {
   /**
-   * Request digest already executed.
+   * Request digest already exists.
    */
   DIGEST_REPLAY =
     "DIGEST_REPLAY",
 
   /**
-   * Exact nonce replay detected.
+   * Exact sender nonce reuse.
    */
   NONCE_REPLAY =
     "NONCE_REPLAY",
 
   /**
-   * Sender nonce older than latest accepted nonce.
+   * Sender nonce is stale.
    */
   NONCE_OUT_OF_ORDER =
     "NONCE_OUT_OF_ORDER",
@@ -55,7 +57,10 @@ export enum ReplayDetectionError {
  * =======================================*/
 
 /**
- * Replay runtime dependencies.
+ * Replay detector runtime dependencies.
+ *
+ * Provides deterministic protocol
+ * replay validation context.
  */
 export interface ReplayDetectorContext {
   /**
@@ -65,7 +70,7 @@ export interface ReplayDetectorContext {
     ReplayStore;
 
   /**
-   * Deterministic runtime time.
+   * Deterministic runtime timestamp.
    */
   currentTime:
     number;
@@ -104,10 +109,16 @@ export interface ReplayDetectionResult {
     HashDigest;
 
   /**
-   * Sender nonce.
+   * Canonical sender nonce.
    */
   nonce:
     number;
+
+  /**
+   * Current lifecycle state.
+   */
+  state?:
+    ProtocolState;
 }
 
 /* =========================================
@@ -119,10 +130,12 @@ export interface ReplayDetectionResult {
  *
  * Flow:
  *
- * digest
+ * envelope
+ * -> signing digest
  * -> replay lookup
- * -> nonce ordering validation
+ * -> nonce validation
  * -> persist replay state
+ * -> persist nonce state
  */
 export function detectReplay(
   envelope:
@@ -131,6 +144,12 @@ export function detectReplay(
   context:
     ReplayDetectorContext,
 ): ReplayDetectionResult {
+
+  /* =====================================
+   * STEP 1
+   * CREATE DIGEST
+   * ===================================*/
+
   /**
    * Deterministic execution identity.
    */
@@ -138,6 +157,11 @@ export function detectReplay(
     createSigningDigest(
       envelope,
     );
+
+  /* =====================================
+   * STEP 2
+   * EXTRACT HEADER DATA
+   * ===================================*/
 
   /**
    * Canonical sender identity.
@@ -152,14 +176,20 @@ export function detectReplay(
     envelope.header.nonce;
 
   /* =====================================
-   * STEP 1
+   * STEP 3
    * DETECT DIGEST REPLAY
    * ===================================*/
 
-  if (
-    context.store.hasReplay(
+  /**
+   * Existing replay record.
+   */
+  const existingReplay =
+    context.store.getReplay(
       digest,
-    )
+    );
+
+  if (
+    existingReplay
   ) {
     return {
       success: false,
@@ -168,27 +198,34 @@ export function detectReplay(
         ReplayDetectionError.DIGEST_REPLAY,
 
       reason:
-        "Envelope digest already executed",
+        "Envelope digest already exists",
 
       digest,
 
       nonce,
+
+      state:
+        existingReplay.state,
     };
   }
 
   /* =====================================
-   * STEP 2
+   * STEP 4
    * VALIDATE NONCE ORDERING
    * ===================================*/
 
-  const latestNonce =
-    context.store.getNonce(
-      sender,
-    )?.nonce ?? 0;
-
   /**
-   * Exact nonce replay.
+   * Latest accepted sender nonce.
    */
+  const latestNonce =
+    context.store.getLatestNonce(
+      sender,
+    ) ?? 0;
+
+  /* =====================================
+   * EXACT NONCE REPLAY
+   * ===================================*/
+
   if (
     nonce ===
     latestNonce
@@ -208,9 +245,10 @@ export function detectReplay(
     };
   }
 
-  /**
-   * Stale nonce ordering.
-   */
+  /* =====================================
+   * STALE NONCE
+   * ===================================*/
+
   if (
     nonce <
     latestNonce
@@ -222,7 +260,7 @@ export function detectReplay(
         ReplayDetectionError.NONCE_OUT_OF_ORDER,
 
       reason:
-        "Sender nonce older than latest accepted nonce",
+        "Sender nonce is stale",
 
       digest,
 
@@ -231,7 +269,7 @@ export function detectReplay(
   }
 
   /* =====================================
-   * STEP 3
+   * STEP 5
    * PERSIST REPLAY RECORD
    * ===================================*/
 
@@ -242,12 +280,18 @@ export function detectReplay(
 
     nonce,
 
+    state:
+      ProtocolState.RECEIVED,
+
     createdAt:
+      context.currentTime,
+
+    updatedAt:
       context.currentTime,
   });
 
   /* =====================================
-   * STEP 4
+   * STEP 6
    * PERSIST NONCE STATE
    * ===================================*/
 
@@ -270,5 +314,8 @@ export function detectReplay(
     digest,
 
     nonce,
+
+    state:
+      ProtocolState.RECEIVED,
   };
 }
