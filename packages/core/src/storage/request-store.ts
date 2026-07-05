@@ -3,8 +3,24 @@ import type {
 } from "../base/envelope.js";
 
 import type {
-HashDigest,
+  HashDigest,
 } from "../base/primitives.js";
+
+import {
+  ProtocolState,
+} from "../state/transitions.js";
+
+import type {
+  ExecutionResult,
+} from "../execution/result.js";
+
+import type {
+  SettlementReceipt,
+} from "../execution/request-settlement.js";
+
+import type {
+  AttestationReceipt,
+} from "../execution/request-attestation.js";
 
 
 /* =========================================
@@ -18,32 +34,69 @@ HashDigest,
  * request storage entry.
  */
 export interface RequestRecord {
+
   /**
-   * Deterministic request digest.
+   * Request digest.
    */
   digest:
     HashDigest;
 
   /**
-   * Canonical protocol envelope.
+   * Canonical envelope.
    */
   envelope:
     Envelope;
 
   /**
-   * Persistence timestamp.
+   * Current protocol state.
+   */
+  state:
+    ProtocolState;
+
+  /**
+   * Execution snapshot.
+   */
+  execution?:
+    ExecutionResult;
+
+  /**
+   * Settlement receipt.
+   */
+  settlement?:
+    SettlementReceipt;
+
+  /**
+   * Attestation receipt.
+   */
+  attestation?:
+    AttestationReceipt;
+
+  /**
+   * Creation timestamp.
    */
   createdAt:
     number;
 
   /**
-   * Optional execution timestamp.
+   * Last lifecycle update.
+   */
+  updatedAt:
+    number;
+
+  /**
+   * Execution timestamp.
    */
   executedAt?:
     number;
 
   /**
-   * Optional finalized timestamp.
+   * Settlement timestamp.
+   */
+  settledAt?:
+    number;
+
+  /**
+   * Finalization timestamp.
    */
   finalizedAt?:
     number;
@@ -60,12 +113,18 @@ export interface RequestRecord {
  * Responsible for:
  *
  * - request persistence
- * - request retrieval
- * - execution tracking
- * - finalization tracking
+ * - lifecycle tracking
+ * - execution snapshots
+ * - settlement tracking
+ * - attestation tracking
  * - validator synchronization
  */
 export interface RequestStore {
+
+  /* =====================================
+   * REQUEST OPERATIONS
+   * ===================================*/
+
   /**
    * Persist request record.
    */
@@ -75,7 +134,21 @@ export interface RequestStore {
   ): void;
 
   /**
-   * Retrieve persisted request.
+   * Update existing request.
+   *
+   * Returns false if the
+   * request does not exist.
+   */
+  update(
+    digest:
+      HashDigest,
+
+    patch:
+      Partial<RequestRecord>,
+  ): boolean;
+
+  /**
+   * Retrieve request.
    */
   get(
     digest:
@@ -85,7 +158,7 @@ export interface RequestStore {
     | undefined;
 
   /**
-   * Detect persisted request.
+   * Detect request.
    */
   has(
     digest:
@@ -93,15 +166,19 @@ export interface RequestStore {
   ): boolean;
 
   /**
-   * Remove persisted request.
+   * Remove request.
    */
   delete(
     digest:
       HashDigest,
   ): boolean;
 
+  /* =====================================
+   * COLLECTION
+   * ===================================*/
+
   /**
-   * Total persisted requests.
+   * Total stored requests.
    */
   size():
     number;
@@ -113,11 +190,29 @@ export interface RequestStore {
     readonly RequestRecord[];
 
   /**
+   * Retrieve request entries.
+   */
+  entries():
+    readonly (
+      readonly [
+        HashDigest,
+        RequestRecord,
+      ]
+    )[];
+
+  /**
+   * Retrieve request digests.
+   */
+  keys():
+    readonly HashDigest[];
+
+  /**
    * Reset persistence layer.
    */
   clear():
     void;
 }
+
 
 /* =========================================
  * IN-MEMORY REQUEST STORE
@@ -130,60 +225,116 @@ export interface RequestStore {
  * Intended for:
  *
  * - local development
- * - simulations
- * - testing
- * - protocol demos
+ * - protocol simulations
+ * - integration testing
+ * - validator runtimes
  */
 export class InMemoryRequestStore
   implements RequestStore {
+
   /**
    * Internal request storage.
+   *
+   * Key:
+   *   request digest
    */
-  private readonly store =
+  private readonly requests =
     new Map<
       HashDigest,
       RequestRecord
     >();
 
   /* =====================================
-   * PERSISTENCE
+   * REQUEST OPERATIONS
    * ===================================*/
 
+  /**
+   * Persist request record.
+   */
   set(
     record:
       RequestRecord,
   ): void {
-    this.store.set(
+
+    this.requests.set(
       record.digest,
-      record,
+      Object.freeze({
+        ...record,
+      }),
     );
   }
 
+  /**
+   * Update existing request.
+   *
+   * Returns false when the
+   * request does not exist.
+   */
+  update(
+    digest:
+      HashDigest,
+
+    patch:
+      Partial<RequestRecord>,
+  ): boolean {
+
+    const current =
+      this.requests.get(
+        digest,
+      );
+
+    if (!current) {
+      return false;
+    }
+
+    this.requests.set(
+      digest,
+      Object.freeze({
+        ...current,
+        ...patch,
+      }),
+    );
+
+    return true;
+  }
+
+  /**
+   * Retrieve request.
+   */
   get(
     digest:
       HashDigest,
   ):
     | RequestRecord
     | undefined {
-    return this.store.get(
+
+    return this.requests.get(
       digest,
     );
   }
 
+  /**
+   * Detect request.
+   */
   has(
     digest:
       HashDigest,
   ): boolean {
-    return this.store.has(
+
+    return this.requests.has(
       digest,
     );
   }
 
+  /**
+   * Remove request.
+   */
   delete(
     digest:
       HashDigest,
   ): boolean {
-    return this.store.delete(
+
+    return this.requests.delete(
       digest,
     );
   }
@@ -192,20 +343,59 @@ export class InMemoryRequestStore
    * COLLECTION
    * ===================================*/
 
+  /**
+   * Total stored requests.
+   */
   size():
     number {
-    return this.store.size;
+
+    return this.requests.size;
   }
 
+  /**
+   * Retrieve request records.
+   */
   values():
     readonly RequestRecord[] {
+
     return [
-      ...this.store.values(),
+      ...this.requests.values(),
     ];
   }
 
+  /**
+   * Retrieve request entries.
+   */
+  entries():
+    readonly (
+      readonly [
+        HashDigest,
+        RequestRecord,
+      ]
+    )[] {
+
+    return [
+      ...this.requests.entries(),
+    ];
+  }
+
+  /**
+   * Retrieve request digests.
+   */
+  keys():
+    readonly HashDigest[] {
+
+    return [
+      ...this.requests.keys(),
+    ];
+  }
+
+  /**
+   * Reset persistence layer.
+   */
   clear():
     void {
-    this.store.clear();
+
+    this.requests.clear();
   }
 }

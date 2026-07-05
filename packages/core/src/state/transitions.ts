@@ -40,6 +40,12 @@ export enum ProtocolState {
   EXECUTING =
     "EXECUTING",
 
+    /**
+   * Runtime execution completed.
+   */
+  EXECUTED =
+    "EXECUTED",
+
   /**
    * Execution completed successfully.
    */
@@ -135,6 +141,16 @@ export const STATE_TRANSITIONS:
     [
       ProtocolState.SETTLED,
 
+      ProtocolState.REJECTED,
+    ],
+
+    /**
+   * Execution completed.
+   */
+  [ProtocolState.EXECUTED]:
+    [
+      ProtocolState.SETTLED,
+  
       ProtocolState.REJECTED,
     ],
 

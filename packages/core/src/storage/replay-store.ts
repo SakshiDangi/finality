@@ -1,8 +1,11 @@
 import type {
-ProtocolAddress,
-HashDigest,
+  ProtocolAddress,
+  HashDigest,
 } from "../base/primitives.js";
 
+import {
+  ProtocolState,
+} from "../state/transitions.js";
 
 /* =========================================
  * REPLAY RECORD
@@ -10,12 +13,10 @@ HashDigest,
 
 /**
  * Persisted replay-protection entry.
- *
  * Represents canonical replay
  * execution history.
  *
  * Used for:
- *
  * - duplicate detection
  * - nonce ordering
  * - validator synchronization
@@ -23,41 +24,26 @@ HashDigest,
  * - distributed recovery
  */
 export interface ReplayRecord {
-  /**
-   * Deterministic request digest.
-   */
-  digest:
-    HashDigest;
+  digest: HashDigest;
+
+  sender: ProtocolAddress;
+
+  nonce: number;
 
   /**
-   * Canonical sender identity.
+   * Current protocol lifecycle.
    */
-  sender:
-    ProtocolAddress;
-
-  /**
-   * Sender nonce.
-   */
-  nonce:
-    number;
+  state: ProtocolState;
 
   /**
    * Initial persistence timestamp.
    */
-  createdAt:
-    number;
+  createdAt: number;
 
   /**
-   * Optional execution timestamp.
+   * Last lifecycle update.
    */
-  executedAt?:
-    number;
-
-  /**
-   * Optional finalization timestamp.
-   */
-  finalizedAt?:
-    number;
+  updatedAt: number;
 }
 
 /* =========================================
@@ -71,21 +57,12 @@ export interface ReplayRecord {
  * for deterministic ordering.
  */
 export interface NonceRecord {
-  /**
-   * Sender identity.
-   */
   sender:
     ProtocolAddress;
 
-  /**
-   * Latest accepted nonce.
-   */
   nonce:
     number;
 
-  /**
-   * Last update timestamp.
-   */
   updatedAt:
     number;
 }
@@ -100,15 +77,16 @@ export interface NonceRecord {
  *
  * Responsible for:
  *
- * - replay persistence
- * - nonce tracking
- * - replay lookups
+ * - replay protection
+ * - request digest tracking
+ * - sender nonce management
+ * - lifecycle updates
  * - validator synchronization
  * - distributed consistency
  */
 export interface ReplayStore {
   /* =====================================
-   * DIGEST OPERATIONS
+   * REPLAY OPERATIONS
    * ===================================*/
 
   /**
@@ -118,6 +96,29 @@ export interface ReplayStore {
     record:
       ReplayRecord,
   ): void;
+
+  /**
+   * Update mutable replay
+   * lifecycle information.
+   *
+   * Immutable fields:
+   *
+   * - digest
+   * - sender
+   * - nonce
+   * - createdAt
+   */
+  updateReplay(
+    digest:
+      HashDigest,
+
+    patch:
+      Pick<
+        ReplayRecord,
+        | "state"
+        | "updatedAt"
+      >,
+  ): boolean;
 
   /**
    * Retrieve replay record.
@@ -130,7 +131,7 @@ export interface ReplayStore {
     | undefined;
 
   /**
-   * Detect replay digest.
+   * Detect replay record.
    */
   hasReplay(
     digest:
@@ -150,7 +151,7 @@ export interface ReplayStore {
    * ===================================*/
 
   /**
-   * Persist sender nonce state.
+   * Persist sender nonce.
    */
   setNonce(
     record:
@@ -158,7 +159,16 @@ export interface ReplayStore {
   ): void;
 
   /**
-   * Retrieve sender nonce state.
+   * Update sender nonce.
+   */
+  updateNonce(
+    sender: ProtocolAddress,
+    nonce: number,
+    updatedAt: number,
+  ): void;
+
+  /**
+   * Retrieve sender nonce.
    */
   getNonce(
     sender:
@@ -168,7 +178,17 @@ export interface ReplayStore {
     | undefined;
 
   /**
-   * Detect nonce state.
+   * Retrieve latest accepted nonce.
+   */
+  getLatestNonce(
+    sender:
+      ProtocolAddress,
+  ):
+    | number
+    | undefined;
+
+  /**
+   * Detect sender nonce.
    */
   hasNonce(
     sender:
@@ -176,7 +196,7 @@ export interface ReplayStore {
   ): boolean;
 
   /**
-   * Remove nonce state.
+   * Remove sender nonce.
    */
   deleteNonce(
     sender:
@@ -184,32 +204,66 @@ export interface ReplayStore {
   ): boolean;
 
   /* =====================================
-   * COLLECTION
+   * COLLECTION OPERATIONS
    * ===================================*/
 
   /**
-   * Total replay entries.
+   * Total replay records.
    */
   replaySize():
     number;
 
   /**
-   * Total nonce entries.
+   * Total nonce records.
    */
   nonceSize():
     number;
 
   /**
-   * Retrieve all replay entries.
+   * Replay record keys.
+   */
+  replayKeys():
+    readonly HashDigest[];
+
+  /**
+   * Nonce record keys.
+   */
+  nonceKeys():
+    readonly ProtocolAddress[];
+
+  /**
+   * Replay records.
    */
   replayValues():
     readonly ReplayRecord[];
 
   /**
-   * Retrieve all nonce entries.
+   * Nonce records.
    */
   nonceValues():
     readonly NonceRecord[];
+
+  /**
+   * Replay key-value pairs.
+   */
+  replayEntries():
+    readonly (
+      readonly [
+        HashDigest,
+        ReplayRecord,
+      ]
+    )[];
+
+  /**
+   * Nonce key-value pairs.
+   */
+  nonceEntries():
+    readonly (
+      readonly [
+        ProtocolAddress,
+        NonceRecord,
+      ]
+    )[];
 
   /**
    * Reset replay persistence.
@@ -235,8 +289,12 @@ export interface ReplayStore {
  */
 export class InMemoryReplayStore
   implements ReplayStore {
+
   /**
    * Replay persistence storage.
+   *
+   * Key:
+   *   request digest
    */
   private readonly replays =
     new Map<
@@ -246,6 +304,9 @@ export class InMemoryReplayStore
 
   /**
    * Sender nonce persistence.
+   *
+   * Key:
+   *   protocol address
    */
   private readonly nonces =
     new Map<
@@ -257,40 +318,91 @@ export class InMemoryReplayStore
    * REPLAY OPERATIONS
    * ===================================*/
 
+  /**
+   * Persist replay record.
+   */
   setReplay(
     record:
       ReplayRecord,
   ): void {
     this.replays.set(
       record.digest,
-      record,
+      Object.freeze({
+        ...record,
+      }),
     );
   }
 
+  /**
+   * Update existing replay record.
+   *
+   * Returns false when the
+   * replay record does not exist.
+   */
+  updateReplay(
+    digest:
+      HashDigest,
+
+    patch:
+      Partial<ReplayRecord>,
+  ): boolean {
+
+    const current =
+      this.replays.get(
+        digest,
+      );
+
+    if (!current) {
+      return false;
+    }
+
+    this.replays.set(
+      digest,
+      Object.freeze({
+        ...current,
+        ...patch,
+      }),
+    );
+
+    return true;
+  }
+
+  /**
+   * Retrieve replay record.
+   */
   getReplay(
     digest:
       HashDigest,
   ):
     | ReplayRecord
     | undefined {
+
     return this.replays.get(
       digest,
     );
   }
 
+  /**
+   * Detect replay record.
+   */
   hasReplay(
     digest:
       HashDigest,
   ): boolean {
+
     return this.replays.has(
       digest,
     );
   }
 
+  /**
+   * Remove replay record.
+   */
   deleteReplay(
     digest:
       HashDigest,
   ): boolean {
+
     return this.replays.delete(
       digest,
     );
@@ -300,40 +412,97 @@ export class InMemoryReplayStore
    * NONCE OPERATIONS
    * ===================================*/
 
+  /**
+   * Persist nonce record.
+   */
   setNonce(
     record:
       NonceRecord,
   ): void {
+
     this.nonces.set(
       record.sender,
-      record,
+      Object.freeze({
+        ...record,
+      }),
     );
   }
 
+  /**
+   * Update sender nonce.
+   */
+  updateNonce(
+    sender:
+      ProtocolAddress,
+
+    nonce:
+      number,
+
+    updatedAt:
+      number,
+  ): void {
+
+    this.nonces.set(
+      sender,
+      Object.freeze({
+        sender,
+        nonce,
+        updatedAt,
+      }),
+    );
+  }
+
+  /**
+   * Retrieve nonce record.
+   */
   getNonce(
     sender:
       ProtocolAddress,
   ):
     | NonceRecord
     | undefined {
+
     return this.nonces.get(
       sender,
     );
   }
 
+  /**
+   * Retrieve latest sender nonce.
+   */
+  getLatestNonce(
+    sender:
+      ProtocolAddress,
+  ):
+    | number
+    | undefined {
+
+    return this.nonces.get(
+      sender,
+    )?.nonce;
+  }
+
+  /**
+   * Detect nonce record.
+   */
   hasNonce(
     sender:
       ProtocolAddress,
   ): boolean {
+
     return this.nonces.has(
       sender,
     );
   }
 
+  /**
+   * Remove nonce record.
+   */
   deleteNonce(
     sender:
       ProtocolAddress,
   ): boolean {
+
     return this.nonces.delete(
       sender,
     );
@@ -343,32 +512,106 @@ export class InMemoryReplayStore
    * COLLECTION
    * ===================================*/
 
+  /**
+   * Total replay records.
+   */
   replaySize():
     number {
+
     return this.replays.size;
   }
 
+  /**
+   * Total nonce records.
+   */
   nonceSize():
     number {
+
     return this.nonces.size;
   }
 
+  /**
+   * Replay values.
+   */
   replayValues():
     readonly ReplayRecord[] {
+
     return [
       ...this.replays.values(),
     ];
   }
 
+  /**
+   * Nonce values.
+   */
   nonceValues():
     readonly NonceRecord[] {
+
     return [
       ...this.nonces.values(),
     ];
   }
 
+  /**
+   * Replay entries.
+   */
+  replayEntries():
+    readonly (
+      readonly [
+        HashDigest,
+        ReplayRecord,
+      ]
+    )[] {
+
+    return [
+      ...this.replays.entries(),
+    ];
+  }
+
+  /**
+   * Nonce entries.
+   */
+  nonceEntries():
+    readonly (
+      readonly [
+        ProtocolAddress,
+        NonceRecord,
+      ]
+    )[] {
+
+    return [
+      ...this.nonces.entries(),
+    ];
+  }
+
+  /**
+   * Replay keys.
+   */
+  replayKeys():
+    readonly HashDigest[] {
+
+    return [
+      ...this.replays.keys(),
+    ];
+  }
+
+  /**
+   * Nonce keys.
+   */
+  nonceKeys():
+    readonly ProtocolAddress[] {
+
+    return [
+      ...this.nonces.keys(),
+    ];
+  }
+
+  /**
+   * Reset replay store.
+   */
   clear():
     void {
+
     this.replays.clear();
 
     this.nonces.clear();

@@ -133,11 +133,32 @@ export interface BaseExecutionResult {
   executedAt:
     number;
 
+    /**
+   * Optional settlement timestamp.
+   */
+  settledAt?:
+    number;
+
+  /**
+   * Optional finalization timestamp.
+   */
+  finalizedAt?:
+    number;
+
   /**
    * Total execution duration.
    */
   durationMs:
     number;
+
+    /**
+   * Optional execution metadata.
+   */
+  metadata?:
+    Record<
+      string,
+      unknown
+    >;
 }
 
 /* =========================================

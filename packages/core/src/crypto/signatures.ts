@@ -31,6 +31,24 @@ function hexToBytes(
   );
 }
 
+
+export function signDigest(
+digest: string,
+privateKey: PrivateKey,
+): Signature {
+const signature =
+secp256k1.sign(
+hexToBytes(digest),
+hexToBytes(privateKey),
+);
+
+return `0x${bytesToHex(
+    signature,
+  )}`;
+}
+
+
+
 /**
  * Sign arbitrary payload. (header + payload)
  *
@@ -44,26 +62,15 @@ export function signEnvelope(
 envelope: UnsignedEnvelope,
 privateKey: PrivateKey,
 ): Signature {
-/**
+const digest =
+createSigningDigest(
+envelope,
+);
 
-* Deterministic protocol digest.  */
-  const digest =
-  createSigningDigest(
-  envelope,
-  );
-
-/**
-* secp256k1 signature.
-  */
-  const signature =
-    secp256k1.sign(
-      hexToBytes(digest),
-      hexToBytes(privateKey),
-    );
-
-  return `0x${bytesToHex(
-    signature,
-  )}`;
+return signDigest(
+digest,
+privateKey,
+);
 }
 
 

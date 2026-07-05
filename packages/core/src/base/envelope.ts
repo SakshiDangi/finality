@@ -56,21 +56,8 @@ export const UnsignedEnvelopeSchema =
      */
     header:
       HeaderSchema,
-
-    /**
-     * Application/business payload.
-     *
-     * Signed together with header.
-     */
     payload:
       EnvelopePayloadSchema,
-
-    /**
-     * Optional runtime metadata.
-     *
-     * NEVER signed.
-     * NEVER trusted for consensus.
-     */
     metadata:
       EnvelopeMetadataSchema
         .optional(),
@@ -121,6 +108,12 @@ export type EnvelopeMetadata =
     typeof EnvelopeMetadataSchema
   >;
 
+
+export type UnsignedEnvelope =
+  z.infer<
+    typeof UnsignedEnvelopeSchema
+  >;
+
 /**
  * Signed envelope type.
  */
@@ -128,11 +121,3 @@ export type Envelope =
   z.infer<
     typeof EnvelopeSchema
   >;
-
-export interface UnsignedEnvelope {
-  header:
-    Envelope["header"];
-
-  payload:
-    Envelope["payload"];
-}

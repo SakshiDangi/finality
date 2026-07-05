@@ -123,19 +123,33 @@ export class SettlementEngine {
    * SETTLEMENT PERSISTENCE
    * ===================================*/
 
-  /**
-   * Persist immutable
-   * settlement record.
-   */
-  settle(
-    record:
-      SettlementRecord,
-  ): void {
-    this.settlements.set(
-      record.digest,
-      record,
-    );
-  }
+/**
+ * Persist immutable
+ * settlement record.
+ */
+settle(
+  record:
+    SettlementRecord,
+): void {
+  this.settlements.set(
+    record.digest,
+    record,
+  );
+}
+
+/**
+ * Persist settlement record.
+ *
+ * Alias for settle().
+ */
+async persist(
+  record:
+    SettlementRecord,
+): Promise<void> {
+  this.settle(
+    record,
+  );
+}
 
   /* =====================================
    * LOOKUP

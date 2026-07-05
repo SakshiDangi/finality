@@ -7,12 +7,6 @@ import type {
 } from "../base/primitives.js";
 
 import type {
-  SignatureHex as Signature,
-  PrivateKey,
-  PublicKey,
-} from "../base/primitives.js";
-
-import type {
   SettlementEngine,
 } from "../state/settlement.js";
 
