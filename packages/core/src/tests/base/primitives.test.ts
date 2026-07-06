@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   HexStringSchema,
   IdentifierSchema,
-  MetadataSchema,
   NonceSchema,
   TimestampSchema
 } from "../../base/primitives.js";
+
+import {
+  MetadataSchema
+} from "../../base/metadata.js"
 
 describe("base/primitives", () => {
   it("should validate identifier", () => {

@@ -8,6 +8,7 @@ import {
   HexStringSchema,
 } from "./primitives.js";
 
+
 /**
  * Arbitrary protocol payload.
  *
@@ -39,8 +40,35 @@ export const EnvelopeMetadataSchema =
     z.unknown(),
   );
 
+/* =========================================
+ * UNSIGNED ENVELOPE
+ * =======================================*/
+
 /**
- * Canonical protocol envelope.
+ * Unsigned protocol envelope.
+ *
+ * Exists BEFORE cryptographic signing.
+ */
+export const UnsignedEnvelopeSchema =
+  z.strictObject({
+    /**
+     * Protocol control plane data.
+     */
+    header:
+      HeaderSchema,
+    payload:
+      EnvelopePayloadSchema,
+    metadata:
+      EnvelopeMetadataSchema
+        .optional(),
+  });
+
+/* =========================================
+ * SIGNED ENVELOPE
+ * =======================================*/
+
+/**
+ * Canonical signed protocol envelope.
  *
  * This is the primary transport object
  * exchanged across:
@@ -52,43 +80,17 @@ export const EnvelopeMetadataSchema =
  * - synchronization layers
  */
 export const EnvelopeSchema =
-  z.strictObject({
-    /**
-     * Protocol control plane data.
-     */
-    header:
-      HeaderSchema,
-
-    /**
-     * Application/business payload.
-     *
-     * Signed together with header.
-     */
-    payload:
-      EnvelopePayloadSchema,
-
+  UnsignedEnvelopeSchema.extend({
     /**
      * Canonical cryptographic signature.
-     *
-     * Usually signs:
-     *
-     * canonicalize(
-     *   header + payload
-     * )
      */
     signature:
       HexStringSchema,
-
-    /**
-     * Optional runtime metadata.
-     *
-     * NEVER signed.
-     * NEVER trusted for consensus.
-     */
-    metadata:
-      EnvelopeMetadataSchema
-        .optional(),
   });
+
+/* =========================================
+ * TYPES
+ * =======================================*/
 
 /**
  * Runtime envelope payload type.
@@ -106,8 +108,14 @@ export type EnvelopeMetadata =
     typeof EnvelopeMetadataSchema
   >;
 
+
+export type UnsignedEnvelope =
+  z.infer<
+    typeof UnsignedEnvelopeSchema
+  >;
+
 /**
- * Canonical protocol envelope type.
+ * Signed envelope type.
  */
 export type Envelope =
   z.infer<

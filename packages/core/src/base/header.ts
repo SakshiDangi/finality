@@ -6,12 +6,22 @@ import {
   SignatureAlgorithmSchema,
 } from "./enums.js";
 
+import {
+  AddressSchema,
+  HexStringSchema,
+} from "./primitives.js";
+
+import type {
+  ProtocolAddress,
+  PublicKey,
+} from "./primitives.js";
+
 /* =========================================
  * HEADER SCHEMA
  * =======================================*/
 
 export const HeaderSchema =
-  z.object({
+  z.strictObject({
     /*
      * Unique message identifier
      */
@@ -34,14 +44,16 @@ export const HeaderSchema =
 
     /*
      * Sender identity
-     * Ethereum-style address for now
+     * Ethereum-style address
      */
     sender:
-      z.string()
-        .regex(
-          /^0x[a-fA-F0-9]{40}$/,
-          "Invalid sender address",
-        ),
+      AddressSchema,
+
+    /*
+     * Sender verification key
+     */
+    publicKey:
+      HexStringSchema,
 
     /*
      * UNIX timestamp in milliseconds
@@ -104,5 +116,17 @@ export const HeaderSchema =
         .default("1.0.0"),
   });
 
-export type Header =
-  z.infer<typeof HeaderSchema>;
+/* =========================================
+ * TYPES
+ * =======================================*/
+
+export interface Header
+  extends z.infer<
+    typeof HeaderSchema
+  > {
+  sender:
+    ProtocolAddress;
+
+  publicKey:
+    PublicKey;
+}

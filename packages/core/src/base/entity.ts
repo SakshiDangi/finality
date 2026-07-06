@@ -2,9 +2,10 @@ import { z } from "zod";
 
 import {
   IdentifierSchema,
-  MetadataSchema,
   TimestampSchema
 } from "./primitives.js";
+
+import { MetadataSchema } from "./metadata.js";
 
 /**
  * Universal protocol entity.
