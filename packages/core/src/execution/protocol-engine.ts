@@ -1,8 +1,4 @@
 import type {
-  Envelope,
-} from "../base/envelope.js";
-
-import type {
   PrivateKey,
   PublicKey,
 } from "../base/primitives.js";
@@ -32,76 +28,114 @@ import {
   ProtocolState,
 } from "../state/transitions.js";
 
+import {
+  ConsensusEngine,
+} from "../state/consensus.js";
+
+import {
+  FinalityStatus,
+} from "../state/finality.js";
+
 /* =========================================
  * ENGINE OPTIONS
  * =======================================*/
 
+/**
+ * Deterministic protocol
+ * runtime configuration.
+ */
 export interface ProtocolEngineOptions {
 
   /**
-   * Validator identifier.
+   * Validator identity.
    */
-  validator: string;
+  validator:
+    string;
 
   /**
    * Validator public key.
    */
-  publicKey: PublicKey;
+  publicKey:
+    PublicKey;
 
   /**
    * Validator signing key.
    */
-  privateKey: PrivateKey;
+  privateKey:
+    PrivateKey;
 
   /**
-   * Verification context.
+   * Request verification context.
    */
   verifier:
     RequestVerifierContext;
+
+  /**
+   * Distributed consensus engine.
+   */
+  consensus:
+    ConsensusEngine;
 }
 
 /* =========================================
  * ENGINE RESULT
  * =======================================*/
 
+/**
+ * Canonical protocol
+ * execution result.
+ */
 export interface ProtocolEngineResult {
 
   /**
-   * Overall pipeline success.
+   * Pipeline success state.
    */
-  success: boolean;
+  success:
+    boolean;
 
   /**
-   * Verification output.
+   * Verification result.
    */
-  verification?: ReturnType<
-    typeof verifyRequest
-  >;
-
-  /**
-   * Execution output.
-   */
-  execution?: Awaited<
+  verification?:
     ReturnType<
-      typeof executeRequest
-    >
-  >;
+      typeof verifyRequest
+    >;
 
   /**
-   * Settlement output.
+   * Execution result.
    */
-  settlement?: Awaited<
-    ReturnType<
-      typeof settleRequest
-    >
-  >;
+  execution?:
+    Awaited<
+      ReturnType<
+        typeof executeRequest
+      >
+    >;
+
+  /**
+   * Settlement result.
+   */
+  settlement?:
+    Awaited<
+      ReturnType<
+        typeof settleRequest
+      >
+    >;
 
   /**
    * Validator attestation.
    */
-  attestation?: ReturnType<
-    typeof attestSettlement
-  >;
+  attestation?:
+    ReturnType<
+      typeof attestSettlement
+    >;
+
+  /**
+   * Distributed consensus result.
+   */
+  consensus?:
+    ReturnType<
+      ConsensusEngine["evaluate"]
+    >;
 
   /**
    * Final lifecycle state.
@@ -110,7 +144,7 @@ export interface ProtocolEngineResult {
     ProtocolState;
 
   /**
-   * Failure reason.
+   * Human-readable diagnostics.
    */
   reason?:
     string;
@@ -121,21 +155,19 @@ export interface ProtocolEngineResult {
  * =======================================*/
 
 /**
- * Executes the complete protocol lifecycle.
+ * Executes complete deterministic
+ * protocol lifecycle.
  *
- * Flow
+ * Flow:
  *
- * Envelope
- *   ↓
- * Verify
- *   ↓
- * Execute
- *   ↓
- * Settle
- *   ↓
- * Attest
- *   ↓
- * Finalize
+ * RECEIVE
+ * -> VERIFY
+ * -> REPLAY CHECK
+ * -> EXECUTE
+ * -> SETTLE
+ * -> ATTEST
+ * -> CONSENSUS
+ * -> FINALIZE
  */
 export async function runProtocol(
 
@@ -150,28 +182,29 @@ export async function runProtocol(
 > {
 
   const {
-    envelope,
     stateMachine,
   } = context;
 
   /* =====================================
-   * VERIFY
+   * STEP 1
+   * VERIFY REQUEST
    * ===================================*/
 
   const verification =
     verifyRequest(
-      envelope,
+      context.envelope,
       options.verifier,
     );
 
-  if (!verification.success) {
+  if (
+    !verification.success
+  ) {
 
     stateMachine.transition(
       ProtocolState.REJECTED,
     );
 
     return {
-
       success: false,
 
       verification,
@@ -181,21 +214,25 @@ export async function runProtocol(
 
       reason:
         verification.reason,
-
     };
-
   }
 
   stateMachine.transition(
     ProtocolState.VERIFIED,
   );
 
+  /* =====================================
+   * STEP 2
+   * REPLAY VALIDATION
+   * ===================================*/
+
   stateMachine.transition(
     ProtocolState.REPLAY_CHECKED,
   );
 
   /* =====================================
-   * EXECUTE
+   * STEP 3
+   * EXECUTE REQUEST
    * ===================================*/
 
   const execution =
@@ -203,14 +240,15 @@ export async function runProtocol(
       context,
     );
 
-  if (!execution.success) {
+  if (
+    !execution.success
+  ) {
 
     stateMachine.transition(
       ProtocolState.REJECTED,
     );
 
     return {
-
       success: false,
 
       verification,
@@ -222,13 +260,16 @@ export async function runProtocol(
 
       reason:
         execution.errorMessage,
-
     };
-
   }
 
+  stateMachine.transition(
+    ProtocolState.EXECUTED,
+  );
+
   /* =====================================
-   * SETTLEMENT
+   * STEP 4
+   * SETTLE REQUEST
    * ===================================*/
 
   const settlement =
@@ -237,14 +278,15 @@ export async function runProtocol(
       execution,
     );
 
-  if (!settlement.success) {
+  if (
+    !settlement.success
+  ) {
 
     stateMachine.transition(
       ProtocolState.REJECTED,
     );
 
     return {
-
       success: false,
 
       verification,
@@ -258,13 +300,16 @@ export async function runProtocol(
 
       reason:
         settlement.reason,
-
     };
-
   }
 
+  stateMachine.transition(
+    ProtocolState.SETTLED,
+  );
+
   /* =====================================
-   * ATTESTATION
+   * STEP 5
+   * PRODUCE ATTESTATION
    * ===================================*/
 
   const attestation =
@@ -277,10 +322,94 @@ export async function runProtocol(
       options.publicKey,
 
       options.privateKey,
-
     );
 
-  if (!attestation.success) {
+  if (
+    !attestation.success
+  ) {
+
+    stateMachine.transition(
+      ProtocolState.REJECTED,
+    );
+
+    return {
+      success: false,
+
+      verification,
+
+      execution,
+
+      settlement,
+
+      attestation,
+
+      finalState:
+        stateMachine.getState(),
+
+      reason:
+        attestation.reason,
+    };
+  }
+
+  stateMachine.transition(
+    ProtocolState.ATTESTED,
+  );
+
+  /* =====================================
+   * STEP 6
+   * DISTRIBUTED CONSENSUS
+   * ===================================*/
+
+  const consensus =
+    options.consensus.evaluate(
+
+      [
+        options.validator,
+      ],
+
+      stateMachine.getState(),
+    );
+
+  /* =====================================
+   * CONSENSUS FINALIZED
+   * ===================================*/
+
+  if (
+    consensus.quorum.status ===
+    FinalityStatus.FINALIZED
+  ) {
+
+    stateMachine.transition(
+      ProtocolState.FINALIZED,
+    );
+
+    return {
+
+      success: true,
+
+      verification,
+
+      execution,
+
+      settlement,
+
+      attestation,
+
+      consensus,
+
+      finalState:
+        stateMachine.getState(),
+    };
+  }
+
+  /* =====================================
+   * CONSENSUS REJECTED
+   * ===================================*/
+
+  if (
+    consensus.quorum.status ===
+    FinalityStatus.REJECTED
+  ) {
 
     stateMachine.transition(
       ProtocolState.REJECTED,
@@ -298,27 +427,23 @@ export async function runProtocol(
 
       attestation,
 
+      consensus,
+
       finalState:
         stateMachine.getState(),
 
       reason:
-        attestation.reason,
-
+        consensus.reason,
     };
-
   }
 
   /* =====================================
-   * FINALIZE
+   * CONSENSUS PENDING
    * ===================================*/
-
-  stateMachine.transition(
-    ProtocolState.FINALIZED,
-  );
 
   return {
 
-    success: true,
+    success: false,
 
     verification,
 
@@ -328,9 +453,12 @@ export async function runProtocol(
 
     attestation,
 
+    consensus,
+
     finalState:
       stateMachine.getState(),
 
+    reason:
+      "Consensus quorum pending",
   };
-
 }

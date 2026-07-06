@@ -35,7 +35,7 @@ export interface StateTransitionRecord {
   /**
    * Deterministic transition time.
    */
-  timestamp:
+  transitionedAt:
     number;
 }
 
@@ -43,6 +43,10 @@ export interface StateTransitionRecord {
  * STATE MACHINE ERRORS
  * =======================================*/
 
+/**
+ * Canonical lifecycle
+ * transition failures.
+ */
 export enum StateMachineError {
   /**
    * Illegal lifecycle transition.
@@ -62,14 +66,24 @@ export enum StateMachineError {
  * TRANSITION RESULT
  * =======================================*/
 
+/**
+ * Deterministic transition result.
+ */
 export interface StateTransitionResult {
   /**
    * Transition success state.
    */
-  success: boolean;
+  success:
+    boolean;
 
   /**
-   * Current protocol state.
+   * Previous lifecycle state.
+   */
+  previousState:
+    ProtocolState;
+
+  /**
+   * Current lifecycle state.
    */
   currentState:
     ProtocolState;
@@ -83,7 +97,8 @@ export interface StateTransitionResult {
   /**
    * Human-readable diagnostics.
    */
-  reason?: string;
+  reason?:
+    string;
 }
 
 /* =========================================
@@ -100,6 +115,15 @@ export interface StateTransitionResult {
  * - preventing invalid execution flow
  * - preserving terminal immutability
  * - recording execution history
+ * - validator-safe state progression
+ *
+ * Flow:
+ *
+ * current state
+ * -> validate transition
+ * -> reject illegal movement
+ * -> persist transition history
+ * -> advance lifecycle state
  */
 export class ProtocolStateMachine {
   /**
@@ -115,8 +139,12 @@ export class ProtocolStateMachine {
     StateTransitionRecord[] =
       [];
 
+  /* =====================================
+   * CONSTRUCTOR
+   * ===================================*/
+
   /**
-   * Create new lifecycle machine.
+   * Create lifecycle machine.
    */
   constructor(
     initialState:
@@ -136,6 +164,7 @@ export class ProtocolStateMachine {
    */
   getState():
     ProtocolState {
+
     return this.currentState;
   }
 
@@ -144,6 +173,7 @@ export class ProtocolStateMachine {
    */
   getHistory():
     readonly StateTransitionRecord[] {
+
     return [
       ...this.history,
     ];
@@ -154,8 +184,45 @@ export class ProtocolStateMachine {
    */
   isTerminal():
     boolean {
+
     return isTerminalState(
       this.currentState,
+    );
+  }
+
+  /**
+   * Total lifecycle transitions.
+   */
+  transitionCount():
+    number {
+
+    return this.history.length;
+  }
+
+  /* =====================================
+   * TRANSITION VALIDATION
+   * ===================================*/
+
+  /**
+   * Detect whether transition
+   * is currently legal.
+   */
+  canTransition(
+    nextState:
+      ProtocolState,
+  ): boolean {
+
+    if (
+      isTerminalState(
+        this.currentState,
+      )
+    ) {
+      return false;
+    }
+
+    return isValidTransition(
+      this.currentState,
+      nextState,
     );
   }
 
@@ -164,30 +231,43 @@ export class ProtocolStateMachine {
    * ===================================*/
 
   /**
-   * Executes deterministic
-   * protocol state transition.
+   * Execute deterministic
+   * protocol lifecycle transition.
+   *
+   * Illegal transitions
+   * MUST fail deterministically.
    */
   transition(
     nextState:
       ProtocolState,
 
-    timestamp:
+    transitionedAt:
       number = Date.now(),
-  ): StateTransitionResult {
+  ):
+    StateTransitionResult {
+
     /**
-     * Terminal states
-     * cannot mutate.
+     * Previous lifecycle state.
      */
+    const previousState =
+      this.currentState;
+
+    /* ===================================
+     * TERMINAL ENFORCEMENT
+     * =================================*/
+
     if (
       isTerminalState(
-        this.currentState,
+        previousState,
       )
     ) {
       return {
         success: false,
 
+        previousState,
+
         currentState:
-          this.currentState,
+          previousState,
 
         error:
           StateMachineError.TERMINAL_STATE,
@@ -197,57 +277,96 @@ export class ProtocolStateMachine {
       };
     }
 
-    /**
-     * Validate lifecycle transition.
-     */
-    if (
-      !isValidTransition(
-        this.currentState,
+    /* ===================================
+     * TRANSITION VALIDATION
+     * =================================*/
+
+    const valid =
+      isValidTransition(
+        previousState,
         nextState,
-      )
+      );
+
+    if (
+      !valid
     ) {
       return {
         success: false,
 
+        previousState,
+
         currentState:
-          this.currentState,
+          previousState,
 
         error:
           StateMachineError.INVALID_TRANSITION,
 
         reason:
-          `Invalid transition from ${this.currentState} to ${nextState}`,
+          `Invalid transition from ${previousState} to ${nextState}`,
       };
     }
 
-    /**
-     * Persist immutable
-     * transition history.
-     */
-    this.history.push({
-      from:
-        this.currentState,
+    /* ===================================
+     * PERSIST TRANSITION
+     * =================================*/
 
-      to:
-        nextState,
+    this.history.push(
+      Object.freeze({
+        from:
+          previousState,
 
-      timestamp,
-    });
+        to:
+          nextState,
 
-    /**
-     * Advance lifecycle state.
-     */
+        transitionedAt,
+      }),
+    );
+
+    /* ===================================
+     * ADVANCE STATE
+     * =================================*/
+
     this.currentState =
       nextState;
 
-    /**
-     * Successful transition.
-     */
+    /* ===================================
+     * SUCCESS
+     * =================================*/
+
     return {
       success: true,
+
+      previousState,
 
       currentState:
         this.currentState,
     };
+  }
+
+  /* =====================================
+   * RESET
+   * ===================================*/
+
+  /**
+   * Reset lifecycle machine.
+   *
+   * Intended for:
+   *
+   * - testing
+   * - simulations
+   * - validator replay
+   * - local development
+   */
+  reset(
+    state:
+      ProtocolState =
+        ProtocolState.RECEIVED,
+  ): void {
+
+    this.currentState =
+      state;
+
+    this.history.length =
+      0;
   }
 }

@@ -5,61 +5,69 @@
 /**
  * Deterministic protocol lifecycle.
  *
- * Every protocol request moves
- * through these states in order.
+ * Every request progresses through
+ * a canonical distributed state machine.
  *
- * This creates:
+ * Guarantees:
  *
- * - execution consistency
- * - validator agreement
- * - settlement determinism
+ * - deterministic execution
  * - replay-safe progression
+ * - validator consistency
+ * - immutable finality
+ * - distributed auditability
  */
 export enum ProtocolState {
+
   /**
-   * Request entered pipeline.
+   * Request entered protocol pipeline.
    */
   RECEIVED =
     "RECEIVED",
 
   /**
-   * Cryptographic verification passed.
+   * Signature + payload verification passed.
    */
   VERIFIED =
     "VERIFIED",
 
   /**
-   * Replay protection passed.
+   * Replay protection succeeded.
    */
   REPLAY_CHECKED =
     "REPLAY_CHECKED",
 
   /**
-   * Execution has started.
+   * Runtime execution started.
    */
   EXECUTING =
     "EXECUTING",
 
-    /**
+  /**
    * Runtime execution completed.
    */
   EXECUTED =
     "EXECUTED",
 
   /**
-   * Execution completed successfully.
+   * Settlement receipt generated.
    */
   SETTLED =
     "SETTLED",
 
   /**
-   * Immutable terminal success state.
+   * Validator attestation completed.
+   */
+  ATTESTED =
+    "ATTESTED",
+
+  /**
+   * Distributed consensus finalized.
    */
   FINALIZED =
     "FINALIZED",
 
   /**
-   * Immutable terminal failure state.
+   * Irrecoverable protocol failure.
    */
   REJECTED =
     "REJECTED",
@@ -70,12 +78,13 @@ export enum ProtocolState {
  * =======================================*/
 
 /**
- * Terminal protocol states.
+ * Immutable terminal states.
  *
  * Once entered:
  *
  * - no further transitions allowed
- * - execution becomes immutable
+ * - state becomes immutable
+ * - execution lifecycle closes
  */
 export const TERMINAL_STATES =
   new Set<ProtocolState>([
@@ -88,14 +97,11 @@ export const TERMINAL_STATES =
  * =======================================*/
 
 /**
- * Deterministic protocol
- * transition graph.
+ * Canonical protocol transition graph.
  *
- * Defines ALL legal lifecycle
- * transitions.
+ * Defines ALL legal lifecycle transitions.
  *
- * Invalid transitions MUST
- * always be rejected.
+ * Invalid transitions MUST always fail.
  */
 export const STATE_TRANSITIONS:
   Readonly<
@@ -104,75 +110,81 @@ export const STATE_TRANSITIONS:
       readonly ProtocolState[]
     >
   > = {
-  /**
-   * Initial request state.
-   */
-  [ProtocolState.RECEIVED]:
-    [
-      ProtocolState.VERIFIED,
 
-      ProtocolState.REJECTED,
-    ],
+  /* =====================================
+   * REQUEST RECEIVED
+   * ===================================*/
 
-  /**
-   * Verification succeeded.
-   */
-  [ProtocolState.VERIFIED]:
-    [
-      ProtocolState.REPLAY_CHECKED,
+  [ProtocolState.RECEIVED]: [
+    ProtocolState.VERIFIED,
+    ProtocolState.REJECTED,
+  ],
 
-      ProtocolState.REJECTED,
-    ],
+  /* =====================================
+   * VERIFICATION COMPLETE
+   * ===================================*/
 
-  /**
-   * Replay protection succeeded.
-   */
-  [ProtocolState.REPLAY_CHECKED]:
-    [
-      ProtocolState.EXECUTING,
+  [ProtocolState.VERIFIED]: [
+    ProtocolState.REPLAY_CHECKED,
+    ProtocolState.REJECTED,
+  ],
 
-      ProtocolState.REJECTED,
-    ],
+  /* =====================================
+   * REPLAY VALIDATION COMPLETE
+   * ===================================*/
 
-  /**
-   * Execution phase.
-   */
-  [ProtocolState.EXECUTING]:
-    [
-      ProtocolState.SETTLED,
+  [ProtocolState.REPLAY_CHECKED]: [
+    ProtocolState.EXECUTING,
+    ProtocolState.REJECTED,
+  ],
 
-      ProtocolState.REJECTED,
-    ],
+  /* =====================================
+   * EXECUTION STARTED
+   * ===================================*/
 
-    /**
-   * Execution completed.
-   */
-  [ProtocolState.EXECUTED]:
-    [
-      ProtocolState.SETTLED,
-  
-      ProtocolState.REJECTED,
-    ],
+  [ProtocolState.EXECUTING]: [
+    ProtocolState.EXECUTED,
+    ProtocolState.REJECTED,
+  ],
 
-  /**
-   * Settlement completed.
-   */
-  [ProtocolState.SETTLED]:
-    [
-      ProtocolState.FINALIZED,
-    ],
+  /* =====================================
+   * EXECUTION COMPLETE
+   * ===================================*/
 
-  /**
-   * Immutable success state.
-   */
-  [ProtocolState.FINALIZED]:
-    [],
+  [ProtocolState.EXECUTED]: [
+    ProtocolState.SETTLED,
+    ProtocolState.REJECTED,
+  ],
 
-  /**
-   * Immutable failure state.
-   */
-  [ProtocolState.REJECTED]:
-    [],
+  /* =====================================
+   * SETTLEMENT COMPLETE
+   * ===================================*/
+
+  [ProtocolState.SETTLED]: [
+    ProtocolState.ATTESTED,
+    ProtocolState.REJECTED,
+  ],
+
+  /* =====================================
+   * VALIDATOR ATTESTATION COMPLETE
+   * ===================================*/
+
+  [ProtocolState.ATTESTED]: [
+    ProtocolState.FINALIZED,
+    ProtocolState.REJECTED,
+  ],
+
+  /* =====================================
+   * TERMINAL SUCCESS
+   * ===================================*/
+
+  [ProtocolState.FINALIZED]: [],
+
+  /* =====================================
+   * TERMINAL FAILURE
+   * ===================================*/
+
+  [ProtocolState.REJECTED]: [],
 } as const;
 
 /* =========================================
@@ -180,16 +192,15 @@ export const STATE_TRANSITIONS:
  * =======================================*/
 
 /**
- * Validates protocol
- * state transition.
+ * Validates lifecycle transition legality.
  *
  * Used by:
  *
  * - execution engines
- * - settlement layers
+ * - consensus layers
+ * - settlement pipelines
+ * - orchestration systems
  * - validators
- * - orchestration pipelines
- * - state machines
  */
 export function isValidTransition(
   currentState:
@@ -198,9 +209,12 @@ export function isValidTransition(
   nextState:
     ProtocolState,
 ): boolean {
+
   return STATE_TRANSITIONS[
     currentState
-  ].includes(nextState);
+  ].includes(
+    nextState,
+  );
 }
 
 /* =========================================
@@ -208,12 +222,13 @@ export function isValidTransition(
  * =======================================*/
 
 /**
- * Detects immutable
- * terminal protocol states.
+ * Detect immutable terminal states.
  */
 export function isTerminalState(
-  state: ProtocolState,
+  state:
+    ProtocolState,
 ): boolean {
+
   return TERMINAL_STATES.has(
     state,
   );

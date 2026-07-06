@@ -20,6 +20,14 @@ import {
 } from "../state/settlement.js";
 
 import {
+  ConsensusEngine,
+} from "../state/consensus.js";
+
+import {
+  ValidatorSet,
+} from "../state/validator-set.js";
+
+import {
   createExecutionContext,
 } from "./context.js";
 
@@ -187,28 +195,60 @@ export async function simulateProtocol(
     });
 
   /* =====================================
-   * RUN ENGINE
+   * VALIDATOR SET
    * ===================================*/
-
+  
+  const validatorSet =
+    new ValidatorSet();
+  
+  validatorSet.register({
+  
+    validator:
+      options.validator,
+  
+    publicKey:
+      options.publicKey,
+  
+    weight: 1,
+  });
+  
+  /* =====================================
+   * CONSENSUS ENGINE
+   * ===================================*/
+  
+  const consensusEngine =
+    new ConsensusEngine({
+      validatorSet,
+    });
+  
+  /* =====================================
+   * RUN PROTOCOL ENGINE
+   * ===================================*/
+  
   const engine =
     await runProtocol(
       context,
       {
-
+  
         validator:
           options.validator,
-
+  
         publicKey:
           options.publicKey,
-
+  
         privateKey:
           options.privateKey,
-
+  
         verifier:
           options.verifier,
-
+  
+        consensus:
+          consensusEngine,
       },
     );
+  /* =====================================
+   * SIMULATION RESULT
+   * ===================================*/
 
   return {
 
@@ -219,7 +259,5 @@ export async function simulateProtocol(
 
     durationMs:
       Date.now() - startedAt,
-
   };
-
 }

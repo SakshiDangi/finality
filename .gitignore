@@ -7,3 +7,4 @@ coverage
 .DS_Store
 *.log
 .next
+pnpm-lock.yaml

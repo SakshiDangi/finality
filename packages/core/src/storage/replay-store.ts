@@ -88,6 +88,30 @@ export interface ReplayStore {
   /* =====================================
    * REPLAY OPERATIONS
    * ===================================*/
+  
+    /**
+   * Persist replay digest.
+   */
+  trackReplay(
+    digest:
+      HashDigest,
+  ):
+    | Promise<void>
+    | void;
+  
+  /**
+   * Persist sender nonce.
+   */
+  trackNonce(
+  
+    sender:
+      string,
+  
+    nonce:
+      number,
+  ):
+    | Promise<void>
+    | void;
 
   /**
    * Persist replay record.
@@ -289,7 +313,6 @@ export interface ReplayStore {
  */
 export class InMemoryReplayStore
   implements ReplayStore {
-
   /**
    * Replay persistence storage.
    *
@@ -392,6 +415,68 @@ export class InMemoryReplayStore
 
     return this.replays.has(
       digest,
+    );
+  }
+
+  /* =====================================
+ * TRACK REPLAY
+ * ===================================*/
+
+  trackReplay(
+    digest: HashDigest,
+  ): void {
+  
+    if (this.replays.has(digest)) {
+      return;
+    }
+  
+    this.replays.set(
+      digest,
+      Object.freeze({
+  
+        digest,
+  
+        sender:
+          "0x0000000000000000000000000000000000000000",
+  
+        nonce: 0,
+  
+        state:
+          ProtocolState.RECEIVED,
+  
+        createdAt:
+          Date.now(),
+  
+        updatedAt:
+          Date.now(),
+      }),
+    );
+  }
+  
+  /* =====================================
+   * TRACK NONCE
+   * ===================================*/
+  
+  trackNonce(
+  
+    sender: string,
+  
+    nonce: number,
+  ): void {
+  
+    this.nonces.set(
+      sender as ProtocolAddress,
+  
+      Object.freeze({
+  
+        sender:
+          sender as ProtocolAddress,
+  
+        nonce,
+  
+        updatedAt:
+          Date.now(),
+      }),
     );
   }
 

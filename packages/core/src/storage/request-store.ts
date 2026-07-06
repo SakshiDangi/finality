@@ -80,8 +80,8 @@ export interface RequestRecord {
   /**
    * Last lifecycle update.
    */
-  updatedAt:
-    number;
+  updatedAt?:
+  number;
 
   /**
    * Execution timestamp.
@@ -100,6 +100,17 @@ export interface RequestRecord {
    */
   finalizedAt?:
     number;
+
+    /**
+   * Arbitrary metadata.
+   */
+  metadata?:
+    Readonly<
+      Record<
+        string,
+        unknown
+      >
+    >;
 }
 
 /* =========================================

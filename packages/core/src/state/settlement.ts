@@ -217,6 +217,23 @@ async persist(
   }
 
   /* =====================================
+ * COLLECTION
+ * ===================================*/
+
+  /**
+   * Retrieve all settlement records.
+   *
+   * Returned as immutable snapshot.
+   */
+  values():
+    readonly SettlementRecord[] {
+  
+    return [
+      ...this.settlements.values(),
+    ];
+  }
+
+  /* =====================================
    * SETTLEMENT QUERIES
    * ===================================*/
 
