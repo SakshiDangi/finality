@@ -121,3 +121,20 @@ export type Envelope =
   z.infer<
     typeof EnvelopeSchema
   >;
+
+/* =========================================
+ * ENVELOPE FACTORY
+ * =======================================*/
+
+/**
+ * Create signed protocol envelope.
+ */
+export function createEnvelope(
+  envelope:
+    Envelope,
+): Envelope {
+
+  return EnvelopeSchema.parse(
+    envelope,
+  );
+}
