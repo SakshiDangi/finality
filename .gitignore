@@ -8,3 +8,5 @@ coverage
 *.log
 .next
 pnpm-lock.yaml
+
+pnpm-lock.yaml
